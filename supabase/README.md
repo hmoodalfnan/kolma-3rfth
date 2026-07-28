@@ -12,6 +12,12 @@ Paste one file, press Run, wait for `Success. No rows returned`, then move to th
 7. `migrations/0007_grants.sql` — transactional point grants
 8. `migrations/0008_global_views.sql` — cross-schedule views
 9. `migrations/0009_webauthn.sql` — passkey / biometric sign-in for staff
+10. `migrations/0010_fix_rls_recursion.sql` — fixes `infinite recursion detected in
+    policy for relation "students"`
+
+Migrations 9 and 10 are safe to run on a project that is already live, and
+migration 10 is safe to re-run. If sign-in reports `Could not find the table
+'public.webauthn_credentials'`, migration 9 has not been applied yet.
 
 ## If you set up before the rename
 
