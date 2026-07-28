@@ -3,7 +3,7 @@ import { securityHeaders } from '@/lib/security/headers';
 
 const SUPABASE_ORIGIN = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/+$/, '');
 
-export function middleware(request) {
+export default function proxy(request) {
   const nonce = btoa(crypto.randomUUID());
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
