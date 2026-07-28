@@ -110,6 +110,6 @@ describe('describeEntry', () => {
         action: 'create',
         after: { count: 21 },
       }),
-    ).toContain('21 عنصراً');
+    ).toBe('مشرف أنشأ 21 طالباً');
   });
 });
