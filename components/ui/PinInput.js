@@ -44,7 +44,7 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
     <div className="flex justify-center gap-2" dir="ltr" role="group" aria-label={label}>
       {digits.map((digit, index) => (
         <input
-          // eslint-disable-next-line react/no-array-index-key
+           
           key={index}
           ref={(el) => {
             refs.current[index] = el;

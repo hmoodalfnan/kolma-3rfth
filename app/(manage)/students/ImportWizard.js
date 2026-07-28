@@ -41,7 +41,7 @@ export function ImportWizard({ groups, onImport, onCancel }) {
       const created = [];
       for (let i = 0; i < rows.length; i += BATCH) {
         const slice = rows.slice(i, i + BATCH);
-        // eslint-disable-next-line no-await-in-loop
+         
         const result = await onImport({
           groupId: groupId || null,
           students: slice.map((r) => ({ full_name: r.full_name, pin: r.pin })),

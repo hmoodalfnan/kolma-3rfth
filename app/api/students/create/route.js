@@ -42,7 +42,7 @@ export async function POST(request) {
     for (const [index, s] of students.entries()) {
       const pin = s.pin ?? generatePin();
 
-      // eslint-disable-next-line no-await-in-loop
+       
       const inserted = await db
         .from('students')
         .insert({
@@ -58,7 +58,7 @@ export async function POST(request) {
       if (inserted.error) throw new Error(inserted.error.message);
       rollbackStudents.push(inserted.data.id);
 
-      // eslint-disable-next-line no-await-in-loop
+       
       const authUser = await db.auth.admin.createUser({
         email: studentEmail(inserted.data.id),
         password: pin,
@@ -67,7 +67,7 @@ export async function POST(request) {
       if (authUser.error) throw new Error(authUser.error.message);
       rollbackUsers.push(authUser.data.user.id);
 
-      // eslint-disable-next-line no-await-in-loop
+       
       const linked = await db
         .from('students')
         .update({ auth_uid: authUser.data.user.id })
