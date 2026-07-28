@@ -37,7 +37,7 @@ export function BoardTable({ columns, rows, loading, sortKey, sortDir = 'desc', 
                   <button
                     type="button"
                     onClick={() => onSort(col.key)}
-                    className="font-semibold hover:text-navy-700"
+                    className="font-semibold hover:text-brand"
                     aria-label={`ترتيب حسب ${col.label}`}
                   >
                     {col.label}

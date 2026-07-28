@@ -24,7 +24,7 @@ export function DateStrip({ schedule, selected, onSelect, completionFor }) {
         type="button"
         aria-label="اليوم السابق"
         onClick={() => onSelect(addDays(selected, -1))}
-        className="size-10 shrink-0 rounded-lg border border-line text-navy-700"
+        className="size-10 shrink-0 rounded-lg border border-line text-brand"
       >
         ›
       </button>
@@ -42,7 +42,7 @@ export function DateStrip({ schedule, selected, onSelect, completionFor }) {
               onClick={() => onSelect(key)}
               aria-current={active ? 'date' : undefined}
               className={`flex min-w-14 shrink-0 flex-col items-center gap-0.5 rounded-xl border px-2 py-2 transition ${
-                active ? 'border-navy-700 bg-navy-700 text-white' : 'border-line bg-panel'
+                active ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-panel'
               } ${locked ? 'opacity-45' : ''}`}
             >
               <span className="text-[10px] font-semibold">{weekdayShort(key)}</span>
@@ -65,7 +65,7 @@ export function DateStrip({ schedule, selected, onSelect, completionFor }) {
         type="button"
         aria-label="اليوم التالي"
         onClick={() => onSelect(addDays(selected, 1))}
-        className="size-10 shrink-0 rounded-lg border border-line text-navy-700"
+        className="size-10 shrink-0 rounded-lg border border-line text-brand"
       >
         ‹
       </button>

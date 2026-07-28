@@ -118,7 +118,7 @@ export function AuditView({ scheduleId, title, showScheduleColumn = false }) {
                     })}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{describeEntry(entry)}</span>
-                  <span className="shrink-0 rounded-full bg-navy-50 px-2 py-0.5 text-[10px] font-bold text-navy-700">
+                  <span className="shrink-0 rounded-full bg-chip px-2 py-0.5 text-[10px] font-bold text-brand">
                     {ROLE_LABELS[entry.actor_role] ?? entry.actor_role}
                   </span>
                 </button>

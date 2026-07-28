@@ -78,7 +78,7 @@ export function QuestionEditor({ question, onSave, onCancel, showSection = true 
   const preview = { ...draft, id: draft.id ?? 'preview', config: draft.config };
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-xl border border-navy-300 p-4">
+    <form onSubmit={submit} className="space-y-4 rounded-xl border border-accent p-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="عنوان البند" htmlFor="qtitle">
           <Input
@@ -152,7 +152,7 @@ export function QuestionEditor({ question, onSave, onCancel, showSection = true 
                 aria-pressed={on}
                 onClick={() => toggleWeekday(day)}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
-                  on ? 'bg-navy-700 text-white' : 'bg-panel text-muted'
+                  on ? 'bg-accent text-accent-ink' : 'bg-panel text-muted'
                 }`}
               >
                 {label}

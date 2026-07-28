@@ -42,7 +42,7 @@ export function ManageShell({ children }) {
       <header className="sticky top-0 z-30 border-b border-line bg-panel/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-navy-700">سجل الأعمال</p>
+            <p className="text-sm font-bold text-brand">سجل الأعمال</p>
             <p className="truncate text-xs text-muted">
               {profile?.displayName} · {ROLE_LABELS[profile?.role] ?? ''}
             </p>
@@ -84,7 +84,7 @@ export function ManageShell({ children }) {
                     prefetch
                     aria-current={active ? 'page' : undefined}
                     className={`block whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                      active ? 'bg-navy-700 text-white' : 'bg-navy-50 text-navy-700'
+                      active ? 'bg-accent text-accent-ink' : 'bg-chip text-brand'
                     }`}
                   >
                     {tab.label}

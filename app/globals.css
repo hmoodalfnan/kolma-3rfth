@@ -24,6 +24,21 @@
   --color-muted: #6b7391;
   --color-line: #e3e6f0;
 
+  /* Semantic, theme-aware pairs. Always use these for anything whose contrast
+     matters — a raw navy-50/navy-700 pair is a light-mode hex that turns into a
+     near-white box or invisible text once the dark theme is on. Each `*-ink`
+     token is the only foreground guaranteed to be readable on its background. */
+  --color-brand: #2a3563; /* headings and section titles */
+  --color-chip: #eef0f7; /* unselected pill / tab / toggle */
+  --color-chip-ink: #2a3563;
+  --color-accent: #2a3563; /* selected pill / tab / toggle */
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #d6dbec; /* selected row tint, behind normal ink */
+  --color-ok: #d9f2e4;
+  --color-ok-ink: #146c43;
+  --color-danger-soft: #fdeaec;
+  --color-danger-ink: #b02a37;
+
   --radius-card: 1.25rem;
 }
 
@@ -34,6 +49,19 @@
     --color-ink: #eef0f7;
     --color-muted: #9aa2c4;
     --color-line: #2a3155;
+
+    /* The accent inverts: on a dark panel the readable emphasis is a light fill
+       with dark text, not the dark navy that disappears into the background. */
+    --color-brand: #c3cae8;
+    --color-chip: #252d52;
+    --color-chip-ink: #c3cae8;
+    --color-accent: #8f9ac4;
+    --color-accent-ink: #141a33;
+    --color-accent-soft: #2a3462;
+    --color-ok: #123d2b;
+    --color-ok-ink: #7ee0ad;
+    --color-danger-soft: #45161c;
+    --color-danger-ink: #ffb3bb;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -43,6 +71,17 @@
       --color-ink: #eef0f7;
       --color-muted: #9aa2c4;
       --color-line: #2a3155;
+
+      --color-brand: #c3cae8;
+      --color-chip: #252d52;
+      --color-chip-ink: #c3cae8;
+      --color-accent: #8f9ac4;
+      --color-accent-ink: #141a33;
+      --color-accent-soft: #2a3462;
+      --color-ok: #123d2b;
+      --color-ok-ink: #7ee0ad;
+      --color-danger-soft: #45161c;
+      --color-danger-ink: #ffb3bb;
     }
   }
 
@@ -61,6 +100,27 @@
   input[type='checkbox'],
   input[type='radio'] {
     min-block-size: 0;
+    /* Without this the native control keeps its light-mode navy fill and becomes
+       an unreadable white-on-white box once the dark theme is on. */
+    accent-color: var(--color-accent);
+    inline-size: 1.15rem;
+    block-size: 1.15rem;
+  }
+}
+
+/* Deliberately unlayered so it outranks Tailwind's utility layer: a `text-xs`
+   on a control would otherwise win and reintroduce the zoom. iOS Safari zooms
+   the viewport on focus whenever a form control's text is under 16px, and it
+   does not zoom back out. Capping this at the phone breakpoint keeps the denser
+   type on desktop, where the zoom behaviour does not exist.
+
+   The alternative — `maximum-scale=1` on the viewport — also disables pinch
+   zoom for everyone, so it is not an option. */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px;
   }
 }
 
@@ -69,6 +129,28 @@
     background-color: var(--color-panel);
     border: 1px solid var(--color-line);
     border-radius: var(--radius-card);
+  }
+
+  /* Selected state carries a border and a ::after checkmark as well as a fill, so
+     it never rests on colour alone. */
+  .chip {
+    background-color: var(--color-chip);
+    color: var(--color-chip-ink);
+    border: 1px solid transparent;
+  }
+
+  .chip-selected {
+    background-color: var(--color-accent);
+    color: var(--color-accent-ink);
+    border: 1px solid var(--color-accent);
+  }
+
+  /* Chips that hide their real control behind `sr-only` still have to show the
+     keyboard focus that lands on it. */
+  .chip:focus-within,
+  .chip-selected:focus-within {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
   }
 
   .geo-texture {

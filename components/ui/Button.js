@@ -1,10 +1,10 @@
 'use client';
 
 const TONES = {
-  primary: 'bg-navy-700 text-white hover:bg-navy-600 disabled:bg-navy-300',
+  primary: 'bg-accent text-accent-ink hover:opacity-90 disabled:opacity-50',
   gold: 'bg-gold-500 text-navy-900 hover:bg-gold-300 disabled:opacity-50',
-  ghost: 'bg-transparent text-navy-700 hover:bg-navy-50 disabled:opacity-50',
-  outline: 'border border-line bg-panel text-ink hover:bg-navy-50 disabled:opacity-50',
+  ghost: 'bg-transparent text-brand hover:bg-chip disabled:opacity-50',
+  outline: 'border border-line bg-panel text-ink hover:bg-chip disabled:opacity-50',
   danger: 'bg-rose-600 text-white hover:bg-rose-500 disabled:opacity-50',
 };
 

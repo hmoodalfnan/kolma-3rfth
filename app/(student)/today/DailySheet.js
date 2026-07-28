@@ -74,7 +74,7 @@ export function DailySheet() {
       )}
 
       {day.error && (
-        <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+        <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink">
           {day.error}
         </p>
       )}
@@ -87,7 +87,7 @@ export function DailySheet() {
       ) : (
         sections.map(({ section, items }) => (
           <section key={section} className="card p-4">
-            <h2 className="mb-3 border-b border-line pb-2 text-sm font-bold text-navy-700">
+            <h2 className="mb-3 border-b border-line pb-2 text-sm font-bold text-brand">
               {section}
             </h2>
             <div className="space-y-3">

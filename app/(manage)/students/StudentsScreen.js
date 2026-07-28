@@ -216,7 +216,7 @@ export function StudentsScreen() {
                       </td>
                       <td className="p-2 tabular-nums">{Number(t?.answer_points ?? 0)}</td>
                       <td className="p-2 tabular-nums">{Number(t?.grant_points ?? 0)}</td>
-                      <td className="p-2 font-bold tabular-nums text-navy-700">
+                      <td className="p-2 font-bold tabular-nums text-brand">
                         {Number(t?.total_points ?? 0)}
                       </td>
                       <td className="p-2">
@@ -239,7 +239,7 @@ export function StudentsScreen() {
                             }
                           }}
                           className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                            s.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-line text-muted'
+                            s.is_active ? 'bg-ok text-ok-ink' : 'bg-line text-muted'
                           }`}
                         >
                           {s.is_active ? 'نشط' : 'معطّل'}

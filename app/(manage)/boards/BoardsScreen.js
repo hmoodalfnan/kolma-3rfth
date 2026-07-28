@@ -34,7 +34,7 @@ export function BoardsScreen() {
             onClick={() => setTab(t.id)}
             aria-current={tab === t.id ? 'page' : undefined}
             className={`rounded-xl px-3 py-2 text-sm font-semibold ${
-              tab === t.id ? 'bg-navy-700 text-white' : 'bg-navy-50 text-navy-700'
+              tab === t.id ? 'bg-accent text-accent-ink' : 'bg-chip text-brand'
             }`}
           >
             {t.label}
@@ -84,7 +84,7 @@ function OverallBoard({ schedule, onError }) {
             key: 'total_points',
             label: 'الإجمالي',
             render: (r) => (
-              <span className="font-bold tabular-nums text-navy-700">{Number(r.total_points)}</span>
+              <span className="font-bold tabular-nums text-brand">{Number(r.total_points)}</span>
             ),
           },
         ]}
@@ -152,7 +152,7 @@ function GroupsBoard({ schedule, onError }) {
                     />
                   </span>
                 </span>
-                <span className="font-bold tabular-nums text-navy-700" dir="ltr">
+                <span className="font-bold tabular-nums text-brand" dir="ltr">
                   {Number(g.total_points)}
                 </span>
               </button>
@@ -262,7 +262,7 @@ function PerQuestionBoard({ schedule, onError }) {
             key: 'points',
             label: 'النقاط',
             render: (r) => (
-              <span className="font-bold tabular-nums text-navy-700">{Number(r.points)}</span>
+              <span className="font-bold tabular-nums text-brand">{Number(r.points)}</span>
             ),
           },
         ]}

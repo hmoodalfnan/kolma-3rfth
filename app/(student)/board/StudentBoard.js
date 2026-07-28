@@ -57,7 +57,7 @@ export function StudentBoard() {
               <li
                 key={row.student_id}
                 className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${
-                  isMe ? 'border-navy-700 bg-navy-50' : 'border-line bg-panel'
+                  isMe ? 'border-accent bg-chip' : 'border-line bg-panel'
                 }`}
               >
                 <span className="w-8 shrink-0 text-center text-lg font-bold tabular-nums">
@@ -69,7 +69,7 @@ export function StudentBoard() {
                     {row.group_name ?? 'بدون مجموعة'}
                   </span>
                 </span>
-                <span className="shrink-0 font-bold tabular-nums text-navy-700" dir="ltr">
+                <span className="shrink-0 font-bold tabular-nums text-brand" dir="ltr">
                   {Number(row.total_points)}
                 </span>
               </li>

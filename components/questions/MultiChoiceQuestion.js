@@ -19,7 +19,7 @@ export function MultiChoiceQuestion({ question, value, onChange, disabled }) {
             <label
               key={opt.id}
               className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 transition ${
-                checked ? 'border-navy-300 bg-navy-50' : 'border-line'
+                checked ? 'border-accent bg-chip' : 'border-line'
               } ${disabled ? 'opacity-60' : 'cursor-pointer'}`}
             >
               <span className="flex items-center gap-2.5">
@@ -29,7 +29,7 @@ export function MultiChoiceQuestion({ question, value, onChange, disabled }) {
                   checked={checked}
                   disabled={disabled}
                   onChange={() => toggle(opt.id)}
-                  className="size-5 accent-[color:var(--color-navy-700)]"
+                  className="size-5 accent-[color:var(--color-accent)]"
                 />
                 <span className="text-sm font-medium">{opt.label}</span>
               </span>

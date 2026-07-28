@@ -156,7 +156,7 @@ export function StudentLogin({ slug }) {
             type="button"
             onClick={() => setGroupId('all')}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-              groupId === 'all' ? 'bg-navy-700 text-white' : 'bg-navy-50 text-navy-700'
+              groupId === 'all' ? 'bg-accent text-accent-ink' : 'bg-chip text-brand'
             }`}
           >
             الكل
@@ -167,7 +167,7 @@ export function StudentLogin({ slug }) {
               type="button"
               onClick={() => setGroupId(g.id)}
               className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                groupId === g.id ? 'bg-navy-700 text-white' : 'bg-navy-50 text-navy-700'
+                groupId === g.id ? 'bg-accent text-accent-ink' : 'bg-chip text-brand'
               }`}
             >
               {g.name}
@@ -182,7 +182,7 @@ export function StudentLogin({ slug }) {
             <button
               type="button"
               onClick={() => setSelected(s)}
-              className="flex w-full items-center justify-between rounded-xl border border-line bg-panel px-3 py-3 text-right transition hover:border-navy-300 hover:bg-navy-50"
+              className="flex w-full items-center justify-between rounded-xl border border-line bg-panel px-3 py-3 text-right transition hover:border-accent hover:bg-chip"
             >
               <span className="font-semibold">{s.full_name}</span>
               <span className="text-xs text-muted">{groupName(s.group_id)}</span>

@@ -218,7 +218,7 @@ export function GlobalBoard() {
               key: 'total_points',
               label: 'الإجمالي',
               render: (r) => (
-                <span className="font-bold tabular-nums text-navy-700">
+                <span className="font-bold tabular-nums text-brand">
                   {Number(r.total_points)}
                 </span>
               ),

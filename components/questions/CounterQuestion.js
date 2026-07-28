@@ -19,7 +19,7 @@ export function CounterQuestion({ question, value, onChange, disabled }) {
           aria-label={`إنقاص ${question.title}`}
           disabled={disabled || current <= 0}
           onClick={() => step(-1)}
-          className="size-11 rounded-xl border border-line text-xl font-bold text-navy-700 disabled:opacity-40"
+          className="size-11 rounded-xl border border-line text-xl font-bold text-brand disabled:opacity-40"
         >
           −
         </button>
@@ -35,7 +35,7 @@ export function CounterQuestion({ question, value, onChange, disabled }) {
           aria-label={`زيادة ${question.title}`}
           disabled={disabled || current >= max}
           onClick={() => step(1)}
-          className="size-11 rounded-xl border border-line text-xl font-bold text-navy-700 disabled:opacity-40"
+          className="size-11 rounded-xl border border-line text-xl font-bold text-brand disabled:opacity-40"
         >
           +
         </button>

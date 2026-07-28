@@ -5,7 +5,7 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 const ToastContext = createContext({ push: () => {} });
 
 const TONES = {
-  info: 'bg-navy-700 text-white',
+  info: 'bg-accent text-accent-ink',
   success: 'bg-emerald-600 text-white',
   error: 'bg-rose-600 text-white',
 };

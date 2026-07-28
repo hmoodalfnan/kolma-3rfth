@@ -3,7 +3,7 @@ export function Panel({ title, action, children, className = '' }) {
     <section className={`card p-4 ${className}`}>
       {(title || action) && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
-          {title && <h2 className="text-sm font-bold text-navy-700">{title}</h2>}
+          {title && <h2 className="text-sm font-bold text-brand">{title}</h2>}
           {action}
         </div>
       )}
@@ -19,7 +19,7 @@ export function EmptyState({ children }) {
 export function ErrorText({ children }) {
   if (!children) return null;
   return (
-    <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+    <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink">
       {children}
     </p>
   );

@@ -17,8 +17,8 @@ export function PerPrayerConfig({ config, onChange }) {
             return (
               <label
                 key={p}
-                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                  on ? 'border-navy-700 bg-navy-50' : 'border-line'
+                className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold ${
+                  on ? 'chip-selected' : 'chip'
                 }`}
               >
                 <input
@@ -33,8 +33,11 @@ export function PerPrayerConfig({ config, onChange }) {
                         : prayers.filter((x) => x !== p),
                     })
                   }
-                  className="size-4 accent-[color:var(--color-navy-700)]"
+                  className="sr-only"
                 />
+                <span aria-hidden="true" className="w-4 text-center">
+                  {on ? '✓' : ''}
+                </span>
                 {PRAYER_LABELS[p]}
               </label>
             );

@@ -260,7 +260,7 @@ function GrantForm({
                 type="button"
                 onClick={() => setPoints(n)}
                 className={`rounded-lg px-3 text-sm font-bold ${
-                  Number(points) === n ? 'bg-navy-700 text-white' : 'bg-navy-50 text-navy-700'
+                  Number(points) === n ? 'bg-accent text-accent-ink' : 'bg-chip text-brand'
                 }`}
               >
                 {n}
@@ -280,7 +280,7 @@ function GrantForm({
                 type="checkbox"
                 checked={applyToMembers}
                 onChange={(e) => setApplyToMembers(e.target.checked)}
-                className="size-5 accent-[color:var(--color-navy-700)]"
+                className="size-5 accent-[color:var(--color-accent)]"
               />
               إضافة النقاط لكل طالب في المجموعة أيضاً
             </label>
@@ -340,7 +340,7 @@ function CriteriaPanel({ scheduleId, criteria, onChanged, onError }) {
             type="checkbox"
             checked={allowNegative}
             onChange={(e) => setAllowNegative(e.target.checked)}
-            className="size-5 accent-[color:var(--color-navy-700)]"
+            className="size-5 accent-[color:var(--color-accent)]"
           />
           يسمح بالخصم
         </label>

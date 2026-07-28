@@ -40,7 +40,7 @@ export function RegisterSW() {
         waiting.postMessage('SKIP_WAITING');
         window.location.reload();
       }}
-      className="fixed inset-x-4 bottom-24 z-40 mx-auto max-w-sm rounded-xl bg-navy-700 px-4 py-2.5 text-sm font-semibold text-white shadow-lg"
+      className="fixed inset-x-4 bottom-24 z-40 mx-auto max-w-sm rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-lg"
     >
       تحديث متاح — اضغط للتحديث
     </button>

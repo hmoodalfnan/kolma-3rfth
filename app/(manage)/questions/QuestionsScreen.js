@@ -150,7 +150,7 @@ export function QuestionsScreen() {
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-semibold">{q.title}</p>
                             <p className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted">
-                              <span className="rounded-full bg-navy-50 px-2 py-0.5 font-bold text-navy-700">
+                              <span className="rounded-full bg-chip px-2 py-0.5 font-bold text-brand">
                                 {TYPE_LABELS[q.type]}
                               </span>
                               <span className="rounded-full bg-gold-100 px-2 py-0.5 font-bold text-gold-700">
@@ -278,7 +278,7 @@ function LibraryPicker({ existing, onCopy, onCancel }) {
                       return next;
                     })
                   }
-                  className="size-5 accent-[color:var(--color-navy-700)]"
+                  className="size-5 accent-[color:var(--color-accent)]"
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{q.title}</span>

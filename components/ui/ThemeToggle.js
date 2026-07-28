@@ -34,7 +34,7 @@ export function ThemeToggle() {
           onClick={() => apply(opt.value)}
           className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition ${
             theme === opt.value
-              ? 'border-navy-700 bg-navy-700 text-white'
+              ? 'border-accent bg-accent text-accent-ink'
               : 'border-line text-ink'
           }`}
         >

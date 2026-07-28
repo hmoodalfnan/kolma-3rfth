@@ -21,7 +21,7 @@ export function PerPrayerQuestion({ question, value, onChange, disabled }) {
             <label
               key={prayer}
               className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-sm transition ${
-                checked ? 'border-navy-300 bg-navy-50' : 'border-line'
+                checked ? 'border-accent bg-chip' : 'border-line'
               } ${disabled ? 'opacity-60' : 'cursor-pointer'}`}
             >
               <span>{PRAYER_LABELS[prayer]}</span>
@@ -31,7 +31,7 @@ export function PerPrayerQuestion({ question, value, onChange, disabled }) {
                 checked={checked}
                 disabled={disabled}
                 onChange={(e) => toggle(prayer, e.target.checked)}
-                className="size-5 shrink-0 accent-[color:var(--color-navy-700)]"
+                className="size-5 shrink-0 accent-[color:var(--color-accent)]"
               />
             </label>
           );

@@ -120,7 +120,7 @@ export function ExportScreen() {
               type="checkbox"
               checked={selected[s.key]}
               onChange={(e) => setSelected({ ...selected, [s.key]: e.target.checked })}
-              className="size-5 accent-[color:var(--color-navy-700)]"
+              className="size-5 accent-[color:var(--color-accent)]"
             />
             {s.label}
           </label>

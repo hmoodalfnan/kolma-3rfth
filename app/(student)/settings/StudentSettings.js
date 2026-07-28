@@ -34,7 +34,7 @@ export function StudentSettings() {
         <ThemeToggle />
         <Link
           href="/change-password"
-          className="flex min-h-[44px] items-center justify-center rounded-xl border border-line font-semibold text-navy-700"
+          className="flex min-h-[44px] items-center justify-center rounded-xl border border-line font-semibold text-brand"
         >
           تغيير الرمز السري
         </Link>

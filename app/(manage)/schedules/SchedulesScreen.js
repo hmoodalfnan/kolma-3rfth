@@ -68,7 +68,7 @@ export function SchedulesScreen() {
                   type="button"
                   onClick={() => select(s.id)}
                   className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-right transition ${
-                    s.id === currentId ? 'border-navy-700 bg-navy-50' : 'border-line'
+                    s.id === currentId ? 'border-accent bg-chip' : 'border-line'
                   }`}
                 >
                   <span className="min-w-0">
@@ -81,7 +81,7 @@ export function SchedulesScreen() {
                     className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
                       s.status === 'archived'
                         ? 'bg-line text-muted'
-                        : 'bg-emerald-50 text-emerald-700'
+                        : 'bg-ok text-ok-ink'
                     }`}
                   >
                     {s.status === 'archived' ? 'مؤرشفة' : 'جارية'}
@@ -150,7 +150,7 @@ function ScheduleForm({ initial, onSubmit, onCancel }) {
           type="checkbox"
           checked={openEnded}
           onChange={(e) => setOpenEnded(e.target.checked)}
-          className="size-5 accent-[color:var(--color-navy-700)]"
+          className="size-5 accent-[color:var(--color-accent)]"
         />
         بدون تاريخ نهاية
       </label>
@@ -230,7 +230,7 @@ function ScheduleSettings({ schedule, onChanged }) {
             type="checkbox"
             checked={row.students_see_leaderboard}
             onChange={(e) => patch({ students_see_leaderboard: e.target.checked })}
-            className="size-5 accent-[color:var(--color-navy-700)]"
+            className="size-5 accent-[color:var(--color-accent)]"
           />
           إظهار لوحة الصدارة للطلاب
         </label>

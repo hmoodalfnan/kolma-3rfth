@@ -149,7 +149,7 @@ export function StaffScreen() {
                       }
                     }}
                     className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                      u.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-line text-muted'
+                      u.is_active ? 'bg-ok text-ok-ink' : 'bg-line text-muted'
                     }`}
                   >
                     {u.is_active ? 'نشط' : 'معطّل'}
@@ -195,7 +195,7 @@ export function StaffScreen() {
                             aria-pressed={on}
                             onClick={() => toggleAssignment(u.id, s.id)}
                             className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
-                              on ? 'bg-navy-700 text-white' : 'bg-navy-50 text-navy-700'
+                              on ? 'bg-accent text-accent-ink' : 'bg-chip text-brand'
                             }`}
                           >
                             {s.name}

@@ -96,7 +96,7 @@ export function ImportWizard({ groups, onImport, onCancel }) {
           </p>
 
           {parsed.errors.length > 0 && (
-            <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg bg-rose-50 p-2 text-xs text-rose-700">
+            <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg bg-danger-soft p-2 text-xs text-danger-ink">
               {parsed.errors.map((e) => (
                 <li key={`${e.rowNumber}-${e.message}`}>
                   صف {e.rowNumber}: {e.message}
@@ -115,7 +115,7 @@ export function ImportWizard({ groups, onImport, onCancel }) {
           </ul>
 
           {progress && (
-            <p className="text-sm font-semibold text-navy-700">
+            <p className="text-sm font-semibold text-brand">
               جارٍ الإضافة… {progress.done} / {progress.total}
             </p>
           )}

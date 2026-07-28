@@ -15,7 +15,7 @@ export function OfflineBanner() {
       role="status"
       aria-live="polite"
       className={`sticky top-0 z-40 px-4 py-2 text-center text-sm font-semibold ${
-        offline ? 'bg-gold-500 text-navy-900' : 'bg-navy-700 text-white'
+        offline ? 'bg-gold-500 text-navy-900' : 'bg-accent text-accent-ink'
       }`}
     >
       {offline

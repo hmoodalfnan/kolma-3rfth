@@ -13,7 +13,7 @@ export function TempPinSheet({ entries, scheduleName, slug, onClose }) {
     <div className="card border-gold-500 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden">
         <div>
-          <h2 className="text-sm font-bold text-navy-700">الأرقام السرية المؤقتة</h2>
+          <h2 className="text-sm font-bold text-brand">الأرقام السرية المؤقتة</h2>
           <p className="mt-1 text-xs text-rose-600">
             اطبع هذه الصفحة الآن — لن تظهر هذه الأرقام مرة أخرى. يمكنك فقط إعادة التعيين لاحقاً.
           </p>
