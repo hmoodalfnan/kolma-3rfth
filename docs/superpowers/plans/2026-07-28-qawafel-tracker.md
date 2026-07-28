@@ -5220,3 +5220,848 @@ git commit -m "feat(student): leaderboard views, student board, and settings"
 ```
 
 ---
+
+## Phase 5 — Manager
+
+### Task 19: Schedules and groups
+
+**Files:**
+- Create: `lib/validation/schedule.js`, `lib/schedules/api.js`
+- Create: `app/(manage)/schedules/page.js`, `SchedulesList.js`, `ScheduleForm.js`, `ScheduleSettings.js`, `GroupsPanel.js`, `JoinLinksPanel.js`
+- Create: `app/api/schedules/clone/route.js`
+- Create: `components/manage/ScheduleSwitcher.js`
+- Test: `tests/validation/schedule.test.js`, `tests/api/clone.test.js`
+
+**Interfaces:**
+- Produces: `scheduleSchema` — `{ name, start_date, end_date (nullable), streak_threshold_pct, backfill_days, students_see_leaderboard }`.
+- Produces: `lib/schedules/api.js` — `listSchedules(client)`, `createSchedule(client, input)` (generates the slug, seeds the four default criteria via `seed_default_criteria`), `updateSchedule`, `archiveSchedule`, `reopenSchedule`, `rotateSlug(client, scheduleId)`, `listGroups`, `createGroup`, `renameGroup`, `deleteGroup`, `rotateGroupSlug`.
+- Produces: `POST /api/schedules/clone` accepting `{ scheduleId, name, startDate, endDate }`.
+
+- [ ] **Step 1: Write the failing validation test**
+
+Create `tests/validation/schedule.test.js` asserting:
+
+```js
+it('accepts a null end date for an open-ended schedule', () => {
+  expect(scheduleSchema.safeParse({
+    name: 'رحلة مفتوحة', start_date: '2026-08-01', end_date: null,
+    streak_threshold_pct: 100, backfill_days: 3, students_see_leaderboard: true,
+  }).success).toBe(true);
+});
+
+it('rejects an end date before the start date', () => { /* expect success === false */ });
+it('rejects a threshold outside 1..100', () => { /* 0 and 101 both fail */ });
+it('rejects a backfill window outside 0..365', () => { /* -1 and 366 both fail */ });
+it('rejects an empty or over-long name', () => { /* '' and 'x'.repeat(161) both fail */ });
+it('strips unknown keys such as status and slug', () => {
+  const parsed = scheduleSchema.parse({ name: 'ر', start_date: '2026-08-01', end_date: null, status: 'archived', slug: 'hack' });
+  expect(parsed.status).toBeUndefined();
+  expect(parsed.slug).toBeUndefined();
+});
+```
+
+The last case matters: a manager must not be able to set `slug` or `status` by posting extra fields.
+
+- [ ] **Step 2: Run it, implement `lib/validation/schedule.js`, run it again**
+
+Use `.strict()` for rejection or `.strip()` for silent removal — here use `.strip()` so extra
+fields are dropped rather than erroring, and assert the stripping in the test above.
+
+- [ ] **Step 3: Write the failing clone test**
+
+Create `tests/api/clone.test.js` asserting that `POST /api/schedules/clone`:
+
+1. Returns `403` cross-site, `401` without a bearer token.
+2. Returns `403` when the caller is not staff of the source schedule — **the key authorization test.**
+3. Copies questions and criteria and groups, with fresh ids and a fresh slug.
+4. Copies **no** students and **no** answers.
+5. Writes an audit entry with `action: 'clone'` naming the source schedule.
+
+- [ ] **Step 4: Implement the clone route**
+
+It must verify staffing by querying through `createRequestClient(token)` — letting RLS answer
+the authorization question — and only then switch to the service client for the bulk copy.
+
+- [ ] **Step 5: Build the screens**
+
+`SchedulesList.js` — cards showing name, date range (`مفتوحة` when `end_date` is null), student count, status, with `<SkeletonList rows={4} />` while loading and optimistic archive/reopen.
+
+`ScheduleForm.js` — create/edit with an **بدون تاريخ نهاية** checkbox that nulls `end_date` and disables the date field.
+
+`ScheduleSettings.js` — threshold slider, backfill days stepper, leaderboard visibility toggle, clone button, archive/reopen, delete (super admin only).
+
+`GroupsPanel.js` — add/rename/reorder/delete groups, showing member counts; deleting a group with members asks for a destination group first.
+
+`JoinLinksPanel.js` — the schedule link and one link per group, each with a copy button, a QR code rendered locally as inline SVG (no external service), and a **تجديد الرابط** button that warns the old link stops working.
+
+`ScheduleSwitcher.js` — a dropdown in the manage layout listing the caller's schedules, persisting the selection in `localStorage` under `qawafel.schedule`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add lib/validation/schedule.js lib/schedules app/\(manage\)/schedules app/api/schedules components/manage tests/validation/schedule.test.js tests/api/clone.test.js
+git commit -m "feat(manage): schedule and group management with join links and cloning"
+```
+
+---
+
+### Task 20: Student management
+
+**Files:**
+- Create: `app/api/students/create/route.js`, `app/api/students/reset-pin/route.js`, `app/api/students/deactivate/route.js`
+- Create: `app/(manage)/students/page.js`, `StudentsTable.js`, `AddStudentDialog.js`, `TempPinSheet.js`
+- Test: `tests/api/students-create.test.js`
+
+**Interfaces:**
+- Produces: `POST /api/students/create` accepting `{ scheduleId, groupId, students: [{ full_name, pin? }] }`, returning `{ created: [{ id, full_name, tempPin }] }`. Used by both the single-add dialog and the Excel import in Task 21.
+- Produces: `POST /api/students/reset-pin` accepting `{ studentId }`, returning `{ tempPin }`.
+- Produces: `POST /api/students/deactivate` accepting `{ studentId, active }`.
+
+- [ ] **Step 1: Write the failing create test**
+
+Create `tests/api/students-create.test.js` asserting:
+
+1. `403` cross-site; `401` without a bearer token.
+2. `403` when the caller does not staff the target schedule.
+3. `400` when `students` is empty, exceeds 500 entries, or a name is blank or over 120 characters.
+4. `400` when a supplied PIN fails `validateStudentPin`.
+5. On success: one `auth.admin.createUser` call per student with `email: studentEmail(id)` and `email_confirm: true`; the student row carries `must_change_password: true`; the response returns the temp PIN **once**.
+6. The audit entry records the student's name and id but **never** the PIN:
+
+```js
+expect(JSON.stringify(rpc.mock.calls.filter(([n]) => n === 'write_audit'))).not.toMatch(/\d{6}/);
+```
+
+7. A partial failure rolls back: if creating the third auth user fails, the two students already inserted are deleted and the response is `500` with nothing half-created.
+
+- [ ] **Step 2: Implement the route**
+
+Order of operations per student: insert the `students` row to obtain its id → create the auth
+user with `studentEmail(id)` and the generated PIN → write `auth_uid` back to the row. If any
+step throws, delete every row and auth user created in this request before returning.
+
+Rate-limit at `students_create:{userId}` — 10 per hour.
+
+- [ ] **Step 3: Build the screens**
+
+`StudentsTable.js` — searchable, group-filterable table with **name · group · points · completion % · streak · status**, `<SkeletonList rows={12} />` while loading, optimistic group moves and activation toggles, and row actions **إعادة تعيين الرمز** / **تعطيل**.
+
+`TempPinSheet.js` — a print-friendly view (`@media print` styles, one card per student showing name, group, schedule, join link, and the temp PIN) shown once after creation or reset, with an explicit warning that the PIN is not retrievable afterwards.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add app/api/students app/\(manage\)/students tests/api/students-create.test.js
+git commit -m "feat(manage): student creation, PIN reset, and printable credential sheets"
+```
+
+---
+
+### Task 21: Excel import
+
+**Files:**
+- Create: `lib/excel/import.js`
+- Create: `app/(manage)/students/import/page.js`, `ImportWizard.js`
+- Test: `tests/excel/import.test.js`
+
+**Interfaces:**
+- Produces: `parseStudentWorkbook(arrayBuffer) -> Promise<{ rows: [{ rowNumber, full_name, pin }], errors: [{ rowNumber, message }] }>`
+- Produces: `validateImportRows(rows) -> { valid, invalid }` applying name and PIN rules plus duplicate-name detection within the file.
+
+The file carries **two columns only** — `الاسم` and an optional `الرمز`. The group is chosen in the wizard, never in the file.
+
+- [ ] **Step 1: Write the failing import test**
+
+Create `tests/excel/import.test.js`. Build fixtures in-memory with ExcelJS so no binary files enter the repo:
+
+```js
+import ExcelJS from 'exceljs';
+
+async function workbook(rows, header = ['الاسم', 'الرمز']) {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('الطلاب');
+  ws.addRow(header);
+  rows.forEach((r) => ws.addRow(r));
+  return wb.xlsx.writeBuffer();
+}
+```
+
+Assertions:
+
+1. Parses a well-formed sheet into rows carrying `full_name` and `pin`.
+2. Accepts a sheet with only the `الاسم` column, leaving `pin` undefined.
+3. Accepts the English headers `name` and `pin` as aliases.
+4. Reports a row with a blank name as an error naming its row number, and does not include it in `rows`.
+5. Trims surrounding whitespace and collapses internal runs of spaces in names.
+6. Rejects a PIN that is not six digits, naming the row.
+7. Flags duplicate names within the file as errors rather than silently creating two students.
+8. **Rejects a formula cell** rather than evaluating or importing it:
+
+```js
+it('rejects a cell containing a formula', async () => {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('الطلاب');
+  ws.addRow(['الاسم', 'الرمز']);
+  ws.addRow([{ formula: 'HYPERLINK("http://evil.example")' }, '482913']);
+  const { errors } = await parseStudentWorkbook(await wb.xlsx.writeBuffer());
+  expect(errors[0].message).toMatch(/صيغة/);
+});
+```
+
+9. Rejects a workbook with more than 5000 data rows.
+10. Rejects a workbook with more than 10 columns.
+11. Rejects a buffer that is not a valid workbook, with a readable Arabic message rather than an ExcelJS stack.
+
+- [ ] **Step 2: Run it, implement `lib/excel/import.js`, run it again**
+
+Guards to implement: reject when `worksheet.rowCount > 5001`; reject when `worksheet.columnCount > 10`; treat any cell whose value is an object carrying a `formula` key as an error; coerce every value with `String(...)` before use; cap name length at 120 characters.
+
+- [ ] **Step 3: Build the wizard**
+
+`ImportWizard.js`, four steps: **choose group → drop file → review → confirm**.
+
+- The file input accepts `.xlsx,.csv`, rejects anything over 2 MB, and checks the leading bytes (`50 4B` for xlsx) before parsing.
+- Parsing happens entirely in the browser; the file is never uploaded.
+- The review table lists every row with a green tick or a red message, a count of valid and invalid rows, and refuses to proceed while zero rows are valid; invalid rows are skipped, not blocking.
+- Confirm posts the valid rows to `/api/students/create` (Task 20) in batches of 50, showing a progress bar, then hands off to `TempPinSheet`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add lib/excel/import.js app/\(manage\)/students/import tests/excel/import.test.js
+git commit -m "feat(manage): client-side Excel student import with validation preview"
+```
+
+---
+
+### Task 22: Question builder
+
+**Files:**
+- Create: `components/questions/editors/` — one editor per type, plus `QuestionEditor.js`
+- Create: `app/(manage)/questions/page.js`, `QuestionsList.js`, `LibraryPicker.js`, `QuestionPreview.js`
+- Create: `lib/questions/api.js`
+- Test: `tests/ui/question-editor.test.js`
+
+**Interfaces:**
+- Produces: `<QuestionEditor question onSave onCancel />` — a dialog holding title, help text, section, points, type selector, the type-specific config editor, day scheduling, and required flag.
+- Produces: `lib/questions/api.js` — `listQuestions`, `createQuestion`, `updateQuestion`, `archiveQuestion`, `reorderQuestions(client, orderedIds)`, `copyFromLibrary(client, { scheduleId, libraryIds })`.
+
+- [ ] **Step 1: Write the failing editor test**
+
+Create `tests/ui/question-editor.test.js` asserting:
+
+1. Changing the type swaps in the matching config editor and resets `config` to that type's defaults — a stale `options` array must not survive a switch to `counter`.
+2. The choice editor adds, removes, and reorders options, and refuses to save with fewer than two.
+3. The choice editor auto-generates an option `id` from the index (`opt_1`, `opt_2`) so a manager never types one, and keeps existing ids stable when reordering — **changing an id would orphan every stored answer**.
+4. Save is blocked with a visible message when `parseConfig` fails, and the message is the Arabic text from Task 2.
+5. The day-scheduling control emits `active_weekdays: [5]` when only Friday is selected and `null` when all seven are selected.
+6. The live preview renders the real Task 15 renderer with the in-progress config.
+7. Points and per-option points accept negative values for choice types, and the counter editor refuses a `max` of zero.
+
+Test 3 in full, because it guards data integrity:
+
+```js
+it('keeps option ids stable when options are reordered', async () => {
+  const onSave = vi.fn();
+  render(<QuestionEditor question={{ type: 'single_choice', config: { options: [
+    { id: 'opt_1', label: 'أ', points: 1 },
+    { id: 'opt_2', label: 'ب', points: 2 },
+  ] } }} onSave={onSave} onCancel={() => {}} />);
+
+  await userEvent.click(screen.getByLabelText('تحريك الخيار "ب" لأعلى'));
+  await userEvent.click(screen.getByRole('button', { name: 'حفظ' }));
+
+  expect(onSave.mock.calls[0][0].config.options).toEqual([
+    { id: 'opt_2', label: 'ب', points: 2 },
+    { id: 'opt_1', label: 'أ', points: 1 },
+  ]);
+});
+```
+
+- [ ] **Step 2: Run it, implement the editors, run it again**
+
+- [ ] **Step 3: Build the questions screen**
+
+`QuestionsList.js` — sections as collapsible groups, each question a row showing title, type badge, points, and its schedule restriction as a chip (`الجمعة فقط`, `من 5 إلى 10 أغسطس`). Drag to reorder with an optimistic write of the new `sort_order`. Row actions: edit, duplicate, archive. Archiving a question that already has answers shows a confirmation explaining that history is preserved.
+
+`LibraryPicker.js` — a modal listing `question_library` grouped by section with checkboxes and a **نسخ إلى الرحلة** button; already-copied items are marked. Copies are independent from that moment on, and the modal says so.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add components/questions/editors app/\(manage\)/questions lib/questions/api.js tests/ui/question-editor.test.js
+git commit -m "feat(manage): question builder with per-type editors, scheduling, and library picker"
+```
+
+---
+
+### Task 23: Criteria and grading
+
+**Files:**
+- Create: `app/(manage)/grading/page.js`, `CriteriaPanel.js`, `StudentGrant.js`, `GroupGrant.js`, `GrantHistory.js`
+- Create: `app/api/grants/route.js`
+- Create: `lib/grants/api.js`
+- Test: `tests/api/grants.test.js`
+
+**Interfaces:**
+- Produces: `POST /api/grants` accepting
+  `{ scheduleId, criterionId, points, note, target: { kind: 'student', studentId } | { kind: 'group', groupId, applyToMembers } }`.
+  For a group grant with `applyToMembers`, it writes the parent group event **and** one child event per member with `parent_event_id` set, inside a single transaction via an RPC.
+
+- [ ] **Step 1: Write the failing grants test**
+
+Create `tests/api/grants.test.js` asserting:
+
+1. `403` cross-site; `401` unauthenticated; `403` when the caller does not staff the schedule.
+2. `400` when `points` is zero, non-numeric, or beyond ±1000.
+3. `400` when the criterion belongs to a different schedule — a cross-schedule criterion id must not be usable.
+4. `400` when the criterion has `allow_negative: false` and `points < 0`, surfacing the Arabic message.
+5. A group grant with `applyToMembers: false` writes exactly one row.
+6. A group grant with `applyToMembers: true` writes one parent plus one child per active member, each child carrying `parent_event_id`.
+7. Deactivated students receive no child event.
+8. The audit entry records target kind, criterion name, points, and note.
+9. Rate-limited at 60 grants per hour per user.
+
+- [ ] **Step 2: Implement the route and the supporting RPC**
+
+Add to a new migration `supabase/migrations/0007_grants.sql`:
+
+```sql
+create or replace function grant_group_points(
+  p_schedule uuid, p_group uuid, p_criterion uuid,
+  p_points numeric, p_note text, p_apply_to_members boolean
+) returns uuid
+language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare parent_id uuid;
+begin
+  if not is_staff_of(p_schedule) then
+    raise exception 'غير مصرح';
+  end if;
+
+  insert into point_events (schedule_id, group_id, criterion_id, points, note, applied_to_members, created_by)
+  values (p_schedule, p_group, p_criterion, p_points, coalesce(p_note, ''), p_apply_to_members, auth.uid())
+  returning id into parent_id;
+
+  if p_apply_to_members then
+    insert into point_events (schedule_id, student_id, criterion_id, points, note, parent_event_id, created_by)
+    select p_schedule, s.id, p_criterion, p_points, coalesce(p_note, ''), parent_id, auth.uid()
+    from students s
+    where s.group_id = p_group and s.is_active;
+  end if;
+
+  return parent_id;
+end $$;
+```
+
+The `is_staff_of` check inside the function is required: `SECURITY DEFINER` bypasses RLS, so
+without it any authenticated user could grant points to any group.
+
+- [ ] **Step 3: Build the screens**
+
+`CriteriaPanel.js` — list, add, rename, reorder, archive criteria; the **يسمح بالخصم** toggle is disabled once the criterion has events, since flipping it would contradict history.
+
+`StudentGrant.js` — student picker (searchable, showing group), criterion picker, a points stepper with quick chips (±1, ±5, ±10), a note field, and separate **زيادة** / **خصم** buttons; the خصم button is hidden when the criterion forbids negatives.
+
+`GroupGrant.js` — the same with a group picker plus the **إضافة النقاط لكل طالب في المجموعة أيضاً** checkbox, and a live preview line reading `سيحصل 5 طلاب على 10 نقاط لكل واحد`.
+
+`GrantHistory.js` — a reverse-chronological list with optimistic insert and an **تراجع** action that deletes the event (cascading to children through `parent_event_id`) and is itself audited.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add app/\(manage\)/grading app/api/grants lib/grants supabase/migrations/0007_grants.sql tests/api/grants.test.js
+git commit -m "feat(manage): schedule criteria and student/group point grants"
+```
+
+---
+
+### Task 24: Manager leaderboards
+
+**Files:**
+- Create: `app/(manage)/boards/page.js`, `OverallBoard.js`, `GroupsBoard.js`, `PerQuestionBoard.js`
+- Create: `components/boards/BoardTable.js`, `components/boards/RankBadge.js`
+- Test: `tests/boards/queries.test.js`
+
+**Interfaces:**
+- Consumes: the views from Task 18 and `lib/boards/queries.js`.
+- Produces: `<BoardTable columns rows loading sortKey onSort />` — a sortable table with a skeleton state, reused by Task 29's global board.
+
+- [ ] **Step 1: Write the failing query test**
+
+Create `tests/boards/queries.test.js` with a mocked Supabase client, asserting that each query
+function builds the expected filter chain: `fetchStudentTotals` filters by `schedule_id`, adds
+`group_id` only when a group is supplied, and applies a date range to the underlying answers
+when `from`/`to` are given. Assert the ordering is `total_points` descending with `full_name`
+ascending as the tie-break, so ranks are stable between renders.
+
+- [ ] **Step 2: Implement and build the three boards**
+
+`OverallBoard.js` — rank, name, **group**, answer points, grant points, total, completion %, streak. Every row shows the group, per the requirement that a student is always identifiable by group.
+
+`GroupsBoard.js` — cards per group with total, average per member, member count, and a bar comparing groups; expanding a card lists its members with their totals.
+
+`PerQuestionBoard.js` — a question picker, then the ranking for that question by `times_completed` and points, with a **الكل** view showing a compact grid of every question and its top three.
+
+All three render `<SkeletonList>` while loading and prefetch the next tab's data on hover.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add app/\(manage\)/boards components/boards tests/boards
+git commit -m "feat(manage): overall, group, and per-question leaderboards"
+```
+
+---
+
+### Task 25: Excel export
+
+**Files:**
+- Create: `lib/excel/export.js`, `lib/excel/sanitize.js`
+- Create: `app/(manage)/export/page.js`, `ExportPanel.js`
+- Test: `tests/excel/sanitize.test.js`, `tests/excel/export.test.js`
+
+**Interfaces:**
+- Produces: `sanitizeCell(value) -> string|number` — prefixes `'` to any string starting with `=`, `+`, `-`, `@`, tab, or carriage return.
+- Produces: `buildWorkbook({ schedule, students, groups, questions, answers, grants, auditEntries }) -> Promise<Blob>` with sheets **ملخص الطلاب · السجل اليومي · سجل النقاط · المجموعات · سجل العمليات**.
+
+- [ ] **Step 1: Write the failing sanitize test**
+
+```js
+describe('sanitizeCell', () => {
+  it('neutralises formula-leading characters', () => {
+    for (const prefix of ['=', '+', '-', '@']) {
+      expect(sanitizeCell(`${prefix}cmd|' /c calc'!A1`)).toBe(`'${prefix}cmd|' /c calc'!A1`);
+    }
+  });
+
+  it('neutralises leading tab and carriage return', () => {
+    expect(sanitizeCell('\tSUM(1)')).toBe("'\tSUM(1)");
+    expect(sanitizeCell('\rSUM(1)')).toBe("'\rSUM(1)");
+  });
+
+  it('leaves ordinary Arabic text untouched', () => {
+    expect(sanitizeCell('محمد علي')).toBe('محمد علي');
+  });
+
+  it('leaves numbers as numbers so Excel can still total them', () => {
+    expect(sanitizeCell(42)).toBe(42);
+    expect(sanitizeCell(-7)).toBe(-7);
+  });
+
+  it('renders null and undefined as an empty string', () => {
+    expect(sanitizeCell(null)).toBe('');
+    expect(sanitizeCell(undefined)).toBe('');
+  });
+});
+```
+
+Note that a **negative number** must stay numeric while a **string starting with `-`** gets
+quoted — that distinction is the test's whole point, since point deductions are negative.
+
+- [ ] **Step 2: Write the failing export test**
+
+Assert that `buildWorkbook` produces the five named sheets; that the daily-sheet matrix has one
+row per student per day and one column per question; that a student named `=cmd` is written as
+`'=cmd`; that RTL is set via `worksheet.views = [{ rightToLeft: true }]`; and that reading the
+generated buffer back with ExcelJS round-trips the values.
+
+- [ ] **Step 3: Implement and build the panel**
+
+`ExportPanel.js` — checkboxes for which sheets to include, an optional date range, a group filter, and a **تصدير** button that fetches the data, builds the workbook in the browser, and triggers a download named `qawafel-<schedule>-<YYYY-MM-DD>.xlsx`. Exporting is audited with `action: 'export'` and the sheet list.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add lib/excel app/\(manage\)/export tests/excel
+git commit -m "feat(manage): five-sheet Excel export with formula-injection protection"
+```
+
+---
+
+### Task 26: Schedule audit log view
+
+**Files:**
+- Create: `app/(manage)/log/page.js`, `components/audit/AuditTable.js`, `components/audit/AuditFilters.js`
+- Create: `lib/audit/query.js`
+- Test: `tests/audit/query.test.js`
+
+**Interfaces:**
+- Produces: `fetchAuditLog(client, { scheduleId, actorId, entityType, action, from, to, cursor, limit })` returning `{ rows, nextCursor }`, keyset-paginated on `(created_at, id)` so 200 students' worth of ticks stays fast.
+- Produces: `describeEntry(entry) -> string` — a human Arabic sentence such as `غيّر «محمد» نقاط سؤال «صلاة الوتر» من 5 إلى 7`.
+
+- [ ] **Step 1: Write the failing test**
+
+Assert that `fetchAuditLog` always constrains by `schedule_id` when one is supplied; that it
+orders `created_at` descending; that `nextCursor` is null on the last page; and that
+`describeEntry` renders each `entity_type`/`action` pair, falling back to a generic sentence
+for an unknown pair instead of throwing or printing `undefined`.
+
+- [ ] **Step 2: Implement and build the screen**
+
+`AuditFilters.js` — actor, entity type, action, and date-range pickers, reflected into the URL query string so a filtered view is shareable.
+
+`AuditTable.js` — time (Riyadh), actor with role badge, the `describeEntry` sentence, and an expandable row showing the raw `before`/`after` JSON in a `<pre>` (as text, never as HTML). Infinite scroll on `nextCursor` with `<SkeletonList rows={10} />` for both the initial load and each page.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add app/\(manage\)/log components/audit lib/audit/query.js tests/audit
+git commit -m "feat(manage): filterable schedule audit log"
+```
+
+---
+
+## Phase 6 — Super admin
+
+### Task 27: Staff accounts and schedule assignment
+
+**Files:**
+- Create: `app/api/staff/create/route.js`, `app/api/staff/reset-password/route.js`, `app/api/staff/assign/route.js`
+- Create: `app/(admin)/staff/page.js`, `StaffTable.js`, `StaffForm.js`, `AssignmentMatrix.js`
+- Test: `tests/api/staff.test.js`
+
+**Interfaces:**
+- Produces: `POST /api/staff/create` accepting `{ username, displayName, role, password }` → `{ id, username }`.
+- Produces: `POST /api/staff/assign` accepting `{ userId, scheduleIds: [] }` — replaces that manager's assignments wholesale.
+- Produces: `POST /api/staff/reset-password` accepting `{ userId, newPassword }`.
+
+- [ ] **Step 1: Write the failing staff test**
+
+Assert:
+
+1. Every route returns `403` unless the caller is a **super admin** — a manager must not create staff. Test this explicitly for each of the three routes.
+2. `400` for a username failing `normalizeUsername`, and `409` for one already taken.
+3. `400` for a password failing `validateStaffPassword`.
+4. Creating a manager writes the `auth.users` row **and** the `app_users` row, and rolls both back if either fails.
+5. `POST /api/staff/assign` with `scheduleIds: []` removes every assignment, and with three ids leaves exactly those three.
+6. A super admin cannot deactivate or demote **themselves** — assert `400` with a clear message, so the system can never be left without an administrator.
+7. No route echoes a password in its response or its audit entry.
+
+Point 6 in full:
+
+```js
+it('refuses to let a super admin demote themselves', async () => {
+  const res = await post('/api/staff/update', { userId: CALLER_ID, role: 'manager' });
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toMatch(/لا يمكنك تغيير صلاحياتك/);
+});
+```
+
+- [ ] **Step 2: Implement the routes**
+
+Each begins with `is_super_admin()` verified through `createRequestClient(token)` — asking the
+database rather than trusting any client-supplied role.
+
+- [ ] **Step 3: Build the screens**
+
+`StaffTable.js` — username, display name, role, assigned schedule count, active toggle, last login (from the audit log).
+
+`AssignmentMatrix.js` — a managers × schedules grid of checkboxes with optimistic toggling, making it obvious at a glance that one manager can hold several schedules and one schedule several managers.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add app/api/staff app/\(admin\)/staff tests/api/staff.test.js
+git commit -m "feat(admin): staff accounts and many-to-many schedule assignment"
+```
+
+---
+
+### Task 28: Master question library
+
+**Files:**
+- Create: `app/(admin)/library/page.js`, `LibraryTable.js`
+- Modify: `lib/questions/api.js` — add `listLibrary`, `createLibraryQuestion`, `updateLibraryQuestion`, `deleteLibraryQuestion`
+- Test: `tests/api/library.test.js`
+
+**Interfaces:**
+- Consumes: `QuestionEditor` from Task 22, reused unchanged — the library editor is the same component pointed at a different table.
+
+- [ ] **Step 1: Write the failing test**
+
+Assert that a manager can `select` from `question_library` but that `insert`, `update`, and
+`delete` all fail for them and succeed for a super admin — verifying the Task 8 policies from
+the application's side. Assert that editing a library question leaves copies already inside
+schedules untouched:
+
+```js
+it('does not mutate schedule copies when the library entry changes', async () => {
+  await updateLibraryQuestion(admin, libraryId, { points: 99 });
+  const { data } = await admin.from('questions').select('points').eq('library_id', libraryId).single();
+  expect(Number(data.points)).toBe(5);
+});
+```
+
+- [ ] **Step 2: Implement and build the screen**
+
+`LibraryTable.js` — sections, drag-reorder, add/edit/delete, and a **مستخدم في N رحلة** counter per entry so deleting a widely-used entry is a considered act. Deletion only clears `questions.library_id` (the foreign key is `on delete set null`); it never removes a schedule's copy.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add app/\(admin\)/library lib/questions/api.js tests/api/library.test.js
+git commit -m "feat(admin): master question library management"
+```
+
+---
+
+### Task 29: Global leaderboard
+
+**Files:**
+- Create: `app/(admin)/global-board/page.js`, `GlobalBoard.js`, `GlobalFilters.js`, `CompareSchedules.js`
+- Create: `lib/boards/global.js`
+- Create: `supabase/migrations/0008_global_views.sql`
+- Test: `tests/boards/global.test.js`
+
+**Interfaces:**
+- Produces: `fetchGlobalBoard(client, filters) -> { rows, totals }` where `filters` is
+  `{ scheduleIds, groupIds, questionIds, questionTypes, criterionIds, from, to, groupBy, sortKey, sortDir, limit, cursor }`
+  and `groupBy` is one of `'student' | 'group' | 'schedule' | 'name'`.
+- Produces: `v_global_student_totals` — `v_student_totals` widened with `schedule_name`, `schedule_status`, `normalized_name`, and date-bounded point sums.
+
+- [ ] **Step 1: Write the failing filter test**
+
+With a mocked client, assert that every filter narrows the query and that combinations compose:
+schedule + group + date range together produce all three constraints; an empty filter object
+produces no constraints beyond the RLS-implied ones; `groupBy: 'name'` aggregates rows sharing
+a `normalized_name` across schedules and sums their points, which is how one person appearing
+in several schedules is rolled up. Assert `normalizeName` collapses whitespace and strips
+Arabic diacritics and tatweel so `مُحَمَّد علي` and `محمد  علي` aggregate together:
+
+```js
+it('normalizes Arabic names for cross-schedule aggregation', () => {
+  expect(normalizeName('مُحَمَّد  علي')).toBe(normalizeName('محمد علي'));
+  expect(normalizeName('محمـــد علي')).toBe(normalizeName('محمد علي'));
+});
+```
+
+- [ ] **Step 2: Implement the migration, the query layer, and the screen**
+
+`GlobalFilters.js` — a collapsible filter bar with multi-selects for schedules, groups, questions, question types, and criteria, plus a date range and a group-by selector. Filters serialize into the URL.
+
+`GlobalBoard.js` — `<BoardTable>` from Task 24 with sortable columns, always showing **name · group · schedule**, keyset pagination, and an **تصدير هذه النتيجة** button reusing Task 25's builder on the current filtered view.
+
+`CompareSchedules.js` — pick two or more schedules and see totals, averages, completion %, and participation side by side.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add app/\(admin\)/global-board lib/boards/global.js supabase/migrations/0008_global_views.sql tests/boards/global.test.js
+git commit -m "feat(admin): fully filterable cross-schedule leaderboard"
+```
+
+---
+
+### Task 30: Global audit log
+
+**Files:**
+- Create: `app/(admin)/global-log/page.js`
+- Modify: `lib/audit/query.js` — allow a null `scheduleId` for super admins and add an actor filter
+- Test: extend `tests/audit/query.test.js`
+
+- [ ] **Step 1: Write the failing test**
+
+Assert that `fetchAuditLog` with `scheduleId: null` applies no schedule constraint (super admin
+path) while a manager's call always carries one, and that the actor and action filters compose
+with the date range.
+
+- [ ] **Step 2: Build the screen**
+
+Reuses `AuditTable` and `AuditFilters` from Task 26, adding an actor filter listing all staff plus a **الطلاب** bucket, and a schedule filter. A summary strip shows counts by action for the selected range.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add app/\(admin\)/global-log lib/audit/query.js tests/audit
+git commit -m "feat(admin): global audit log with actor and schedule filters"
+```
+
+---
+
+## Phase 7 — Polish and ship
+
+### Task 31: Service worker, theming, and loading polish
+
+**Files:**
+- Create: `public/sw.js`, `public/manifest.webmanifest`, `components/pwa/RegisterSW.js`, `components/ui/ThemeToggle.js`
+- Modify: `app/layout.js`, every list screen
+- Test: `tests/pwa/sw-strategies.test.js`
+
+**Interfaces:**
+- Produces: `chooseStrategy(request) -> 'network-only' | 'cache-first' | 'stale-while-revalidate'` exported from `public/sw.js` via a small shared module `lib/pwa/strategy.js` so it is unit-testable outside the worker.
+
+- [ ] **Step 1: Write the failing strategy test**
+
+```js
+describe('chooseStrategy', () => {
+  it('never caches API calls', () => {
+    expect(chooseStrategy(new Request('https://qawafel.app/api/auth/login'))).toBe('network-only');
+    expect(chooseStrategy(new Request('https://qawafel.app/api/join/abcdefghij'))).toBe('network-only');
+  });
+
+  it('never caches Supabase traffic', () => {
+    expect(chooseStrategy(new Request('https://xyz.supabase.co/rest/v1/answers'))).toBe('network-only');
+  });
+
+  it('caches immutable build assets first', () => {
+    expect(chooseStrategy(new Request('https://qawafel.app/_next/static/chunks/main.js'))).toBe('cache-first');
+  });
+
+  it('revalidates navigations in the background', () => {
+    const req = new Request('https://qawafel.app/today', { headers: { accept: 'text/html' } });
+    expect(chooseStrategy(req)).toBe('stale-while-revalidate');
+  });
+
+  it('leaves non-GET requests uncached', () => {
+    expect(chooseStrategy(new Request('https://qawafel.app/today', { method: 'POST' }))).toBe('network-only');
+  });
+});
+```
+
+Caching an auth response would be a security bug, which is why the first two cases exist.
+
+- [ ] **Step 2: Implement the strategy module and the worker**
+
+`public/sw.js` precaches the app shell on `install`, deletes stale caches on `activate`, applies `chooseStrategy` on `fetch`, and responds to a `SKIP_WAITING` message. Cache names carry a version constant bumped on each deploy.
+
+`RegisterSW.js` registers the worker after `load`, and shows a **تحديث متاح** toast when a new worker is waiting.
+
+- [ ] **Step 3: Finish the visual layer**
+
+- `ThemeToggle.js` writes `data-theme` to `<html>` and persists to `localStorage`; the root layout reads it before paint with a tiny inline script carrying the CSP nonce.
+- Add the eight-fold geometric background texture as an inline SVG data URI at low opacity on the auth and board screens only — the logo mark itself is never used.
+- Audit every screen for a skeleton state and every mutation for an optimistic path; add `router.prefetch` on nav hover and an `IntersectionObserver` prefetch for board and log rows.
+- Verify contrast for navy-on-white and gold-on-navy in both themes at AA.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add public lib/pwa components/pwa components/ui/ThemeToggle.js app/layout.js tests/pwa
+git commit -m "feat: service worker, theme toggle, and loading-state polish"
+```
+
+---
+
+### Task 32: Security verification and deployment
+
+**Files:**
+- Create: `docs/SETUP.md`, `docs/SECURITY.md`
+- Create: `tests/security/no-service-key-in-client.test.js`
+- Modify: `README.md`
+
+- [ ] **Step 1: Write the failing leak test**
+
+Create `tests/security/no-service-key-in-client.test.js`:
+
+```js
+import { describe, it, expect } from 'vitest';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
+
+function walk(dir, out = []) {
+  for (const entry of readdirSync(dir)) {
+    if (entry === 'node_modules' || entry === '.next' || entry === '.git') continue;
+    const full = path.join(dir, entry);
+    if (statSync(full).isDirectory()) walk(full, out);
+    else if (/\.(js|jsx|mjs)$/.test(entry)) out.push(full);
+  }
+  return out;
+}
+
+const files = walk(process.cwd());
+
+describe('client bundle safety', () => {
+  it('never references the service role key outside lib/supabase/server.js', () => {
+    const offenders = files.filter(
+      (f) => readFileSync(f, 'utf8').includes('SUPABASE_SERVICE_ROLE_KEY')
+        && !f.endsWith(path.join('lib', 'supabase', 'server.js'))
+        && !f.includes(path.join('tests', ''))
+        && !f.includes(path.join('docs', '')),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it('never imports the server Supabase module from a client component', () => {
+    const offenders = files.filter((f) => {
+      const src = readFileSync(f, 'utf8');
+      return src.includes("'use client'") && src.includes('@/lib/supabase/server');
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it('never uses dangerouslySetInnerHTML', () => {
+    const offenders = files.filter(
+      (f) => readFileSync(f, 'utf8').includes('dangerouslySetInnerHTML') && !f.includes('tests'),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps no hard-coded Supabase keys in source', () => {
+    const jwtLike = /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/;
+    const offenders = files.filter((f) => jwtLike.test(readFileSync(f, 'utf8')));
+    expect(offenders).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2: Run the full suite and the audit**
+
+```bash
+npm test && npm run lint && npm audit --omit=dev && npm run build
+```
+
+Expected: all tests pass, lint clean, `npm audit` reports 0 vulnerabilities, build succeeds.
+Any advisory must be resolved or explicitly justified in `docs/SECURITY.md` — not ignored.
+
+- [ ] **Step 3: Verify RLS from the outside**
+
+With the app deployed to a Vercel preview, run the Phase 2 database suite against the live
+project and additionally confirm by hand, using the browser console on the student view:
+
+```js
+const c = window.__qawafelClient; // exposed only in development builds
+await c.from('students').select('*');           // expect: only the caller's schedule
+await c.from('audit_log').select('*');           // expect: []
+await c.from('app_users').select('*');           // expect: only the caller's own row, or []
+await c.from('answers').update({ points: 9999 }).eq('id', someId);  // expect: no rows changed
+```
+
+Record the outputs in `docs/SECURITY.md`.
+
+- [ ] **Step 4: Write the setup guide**
+
+`docs/SETUP.md` covers, in order:
+
+1. Create the Supabase project; note the region and copy the project URL, anon key, and service role key.
+2. Run migrations `0001`–`0008` in the SQL editor.
+3. Create the `mohammed` super admin per `supabase/README.md`.
+4. Set Auth settings: disable public sign-ups, set the minimum password length to 6 (students use 6-digit PINs), set the site URL to the production domain.
+5. Import the repo into Vercel; add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `AUTH_EMAIL_DOMAIN` as environment variables, with the service key marked server-only.
+6. Deploy, then sign in as `mohammed`, create a manager, assign a schedule, and walk the first-run checklist: create groups → import students → copy questions from the library → print PIN sheets → share the join link.
+7. Set the daily archive job: Supabase **Database → Cron** running
+   `update schedules set status = 'archived', archived_at = now() where status = 'active' and end_date is not null and end_date < (now() at time zone timezone)::date;`
+   at 00:05 Riyadh. Open-ended schedules (`end_date is null`) are deliberately untouched.
+
+`docs/SECURITY.md` records the threat model, the control for each threat, and the verification output from Step 3.
+
+- [ ] **Step 5: Final commit**
+
+```bash
+git add docs README.md tests/security
+git commit -m "docs: setup and security guides, plus client bundle leak tests"
+```
+
+---
+
+## Self-Review
+
+**Spec coverage.** Every section of the spec maps to a task: roles → 10, 14, 27 · auth mechanism and login flow → 11 · passwords and PINs → 5, 13 · join links → 12, 19 · schedules incl. open-ended → 4, 6, 19 · groups → 19 · question types → 2, 15, 22 · library vs schedule → 22, 28 · day scheduling → 4, 22 · answers and DB-computed points → 3, 7 · derived metrics → 3, 5, 18 · criteria and grants → 23 · leaderboards → 18, 24, 29 · Excel import/export → 21, 25 · audit log → 9, 26, 30 · offline → 16, 17, 31 · security → 1, 7, 8, 9, 11, 21, 25, 32 · UI and design → 1, 15, 31 · module boundaries → the File Structure section · deployment → 32.
+
+**Known deviations from the spec, deliberate:**
+- The spec listed `0001`–`0005` migrations; the plan adds `0006_views.sql`, `0007_grants.sql`, and `0008_global_views.sql` because views and the group-grant RPC belong with the features that introduce them.
+- The spec's file structure showed `lib/points/` as a client mirror only; the plan keeps that role but names the streak calculator there too, since it is pure display logic.
+
+**Naming consistency checked across tasks:** `app_role()`, `app_student_id()`, `is_staff_of()`, `is_super_admin()`, `app_score_answer()`, `app_max_points()`, `write_audit()`, `rl_hit()`, `auth_check_lock()`, `auth_record_failure()`, `auth_reset_failures()`, `seed_default_criteria()`, `grant_group_points()` — each defined once and referenced with the same signature everywhere. On the JavaScript side: `scoreAnswer`, `maxPoints`, `completionPct`, `currentStreak`, `isQuestionActiveOn`, `activeQuestionsOn`, `todayInRiyadh`, `backfillWindow`, `isWithinBackfill`, `scheduleDayRange`, `enqueue`, `pending`, `flush`, `mirror`, `startAutoSync`, `sanitizeCell`, `buildWorkbook`, `writeAudit`, `homeFor`, `canAccess`.
+
