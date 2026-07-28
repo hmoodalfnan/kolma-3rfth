@@ -1,0 +1,77 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: var(--font-arabic), system-ui, sans-serif;
+
+  --color-navy-50: #eef0f7;
+  --color-navy-100: #d6dbec;
+  --color-navy-200: #b7c0e0;
+  --color-navy-300: #8f9ac4;
+  --color-navy-500: #4a5691;
+  --color-navy-600: #37427a;
+  --color-navy-700: #2a3563;
+  --color-navy-800: #1f2749;
+  --color-navy-900: #141a33;
+
+  --color-gold-100: #f7eecd;
+  --color-gold-300: #e8cf7a;
+  --color-gold-500: #c9a227;
+  --color-gold-700: #96771a;
+
+  --color-surface: #f7f8fb;
+  --color-panel: #ffffff;
+  --color-ink: #1b2033;
+  --color-muted: #6b7391;
+  --color-line: #e3e6f0;
+
+  --radius-card: 1.25rem;
+}
+
+@layer base {
+  :root[data-theme='dark'] {
+    --color-surface: #0f1428;
+    --color-panel: #191f3a;
+    --color-ink: #eef0f7;
+    --color-muted: #9aa2c4;
+    --color-line: #2a3155;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --color-surface: #0f1428;
+      --color-panel: #191f3a;
+      --color-ink: #eef0f7;
+      --color-muted: #9aa2c4;
+      --color-line: #2a3155;
+    }
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  [role='button'],
+  input,
+  select,
+  textarea {
+    min-block-size: 44px;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    min-block-size: 0;
+  }
+}
+
+@layer utilities {
+  .card {
+    background-color: var(--color-panel);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+  }
+
+  .geo-texture {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%232A3563' stroke-opacity='0.06' stroke-width='2'%3E%3Crect x='25' y='25' width='70' height='70'/%3E%3Crect x='25' y='25' width='70' height='70' transform='rotate(45 60 60)'/%3E%3C/g%3E%3C/svg%3E");
+  }
+}
