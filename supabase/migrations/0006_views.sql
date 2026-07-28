@@ -1,4 +1,4 @@
--- Qawafel: leaderboard views.
+-- Deeds tracker: leaderboard views.
 -- security_invoker = on is essential; without it a view runs as its owner and
 -- silently bypasses every RLS policy.
 

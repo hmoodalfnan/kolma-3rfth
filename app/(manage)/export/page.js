@@ -1,6 +1,6 @@
 import { ExportScreen } from './ExportScreen';
 
-export const metadata = { title: 'تصدير — قوافل' };
+export const metadata = { title: 'تصدير — سجل الأعمال' };
 
 export default function ExportPage() {
   return <ExportScreen />;

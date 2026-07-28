@@ -1,4 +1,4 @@
-# قوافل — Faith & Conduct Tracker: Design Spec
+# سجل الأعمال — Faith & Conduct Tracker: Design Spec
 
 **Date:** 2026-07-28
 **Status:** Approved for planning
@@ -41,8 +41,8 @@ backed by Supabase Postgres and deployed on Vercel.
 All three roles are real Supabase Auth users. Supabase requires an email address, so one is
 synthesized internally and never shown or typed:
 
-- Staff: `<username>@qawafel.internal`
-- Student: `stu_<student_id>@qawafel.internal`
+- Staff: `<username>@tracker.internal`
+- Student: `stu_<student_id>@tracker.internal`
 
 **Rationale:** bcrypt hashing, refresh-token rotation, and session persistence are handled by
 Supabase; authorization is enforced in the database via RLS on `auth.uid()`. No service-role

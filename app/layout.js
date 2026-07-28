@@ -11,9 +11,24 @@ const arabic = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata = {
-  title: 'قوافل — متابعة الأعمال',
+  title: 'سجل الأعمال',
   description: 'متابعة الأعمال الإيمانية والسلوكية',
   manifest: '/manifest.webmanifest',
+  applicationName: 'سجل الأعمال',
+  icons: {
+    icon: [
+      { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    // iOS ignores the web manifest entirely and reads this instead.
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'سجل الأعمال',
+    statusBarStyle: 'black-translucent',
+  },
+  formatDetection: { telephone: false },
 };
 
 // A per-request CSP nonce cannot be baked into a statically prerendered page, and

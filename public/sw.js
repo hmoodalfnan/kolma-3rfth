@@ -1,10 +1,19 @@
-/* Qawafel service worker — hand-rolled so caching rules stay explicit.
+/* Deeds tracker service worker — hand-rolled so caching rules stay explicit.
    Mirrors lib/pwa/strategy.js; both are covered by tests/pwa/strategy.test.js. */
 
 const VERSION = 'v1';
-const SHELL_CACHE = `qawafel-shell-${VERSION}`;
-const RUNTIME_CACHE = `qawafel-runtime-${VERSION}`;
-const SHELL = ['/', '/today', '/board', '/settings', '/manifest.webmanifest'];
+const SHELL_CACHE = `tracker-shell-${VERSION}`;
+const RUNTIME_CACHE = `tracker-runtime-${VERSION}`;
+const SHELL = [
+  '/',
+  '/today',
+  '/board',
+  '/settings',
+  '/manifest.webmanifest',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/apple-touch-icon.png',
+];
 
 function chooseStrategy(request) {
   if (request.method !== 'GET') return 'network-only';

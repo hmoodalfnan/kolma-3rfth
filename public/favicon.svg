@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="سجل الأعمال">
+  <!-- Simplified mark: at 16px the double square turns to mud, so the favicon
+       keeps one square plus the check. -->
+  <rect width="512" height="512" rx="96" fill="#2A3563"/>
+  <g fill="none" stroke="#C9A227" stroke-width="26" stroke-linejoin="round">
+    <rect x="132" y="132" width="248" height="248" rx="14" transform="rotate(45 256 256)"/>
+  </g>
+  <path d="M196 256 l40 42 l80 -92"
+        fill="none" stroke="#FFFFFF" stroke-width="38"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

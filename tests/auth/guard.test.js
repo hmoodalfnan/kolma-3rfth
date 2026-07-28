@@ -25,7 +25,12 @@ describe('canAccess', () => {
   it('lets a manager into the management area but not the admin area', () => {
     expect(canAccess('manager', '/schedules')).toBe(true);
     expect(canAccess('manager', '/questions')).toBe(true);
+    expect(canAccess('manager', '/account')).toBe(true);
     expect(canAccess('manager', '/admin/staff')).toBe(false);
+  });
+
+  it('keeps a student out of the staff account page', () => {
+    expect(canAccess('student', '/account')).toBe(false);
   });
 
   it('lets a super admin everywhere', () => {

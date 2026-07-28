@@ -107,7 +107,7 @@ export function GlobalBoard() {
       new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       }),
-      `qawafel-global-${todayInRiyadh()}.xlsx`,
+      `tracker-global-${todayInRiyadh()}.xlsx`,
     );
     toast.push('تم تنزيل النتيجة المعروضة', 'success');
   }

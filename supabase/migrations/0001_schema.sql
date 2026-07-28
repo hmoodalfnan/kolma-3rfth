@@ -1,4 +1,4 @@
--- Qawafel: core schema
+-- Deeds tracker: core schema
 create extension if not exists pgcrypto;
 
 create type app_role_t        as enum ('super_admin', 'manager');

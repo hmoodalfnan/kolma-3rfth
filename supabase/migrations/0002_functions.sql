@@ -1,4 +1,4 @@
--- Qawafel: scoring, identity helpers, and write guards.
+-- Deeds tracker: scoring, identity helpers, and write guards.
 -- Named app_role() rather than current_role() to avoid the PostgreSQL built-in.
 
 create or replace function app_score_answer(

@@ -25,6 +25,6 @@ export const config = {
   matcher: [
     // Static assets are immutable and carry no inline script, so they skip the
     // per-request nonce entirely.
-    '/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest.webmanifest).*)',
+    '/((?!_next/static|_next/image|sw\\.js|manifest\\.webmanifest|.*\\.(?:png|svg|ico|webmanifest|woff2?)$).*)',
   ],
 };

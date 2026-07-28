@@ -16,6 +16,7 @@ const MANAGE_TABS = [
   { href: '/boards', label: 'الصدارة' },
   { href: '/export', label: 'تصدير' },
   { href: '/log', label: 'السجل' },
+  { href: '/account', label: 'حسابي' },
 ];
 
 const ADMIN_TABS = [
@@ -41,7 +42,7 @@ export function ManageShell({ children }) {
       <header className="sticky top-0 z-30 border-b border-line bg-panel/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-navy-700">قوافل</p>
+            <p className="text-sm font-bold text-navy-700">سجل الأعمال</p>
             <p className="truncate text-xs text-muted">
               {profile?.displayName} · {ROLE_LABELS[profile?.role] ?? ''}
             </p>

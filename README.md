@@ -1,4 +1,4 @@
-# قوافل — Faith & Conduct Tracker
+# سجل الأعمال — Faith & Conduct Tracker
 
 A mobile-first Arabic web app for tracking students' daily faith practices and conduct
 across multi-day programmes, with points, streaks, group competition, leaderboards, full

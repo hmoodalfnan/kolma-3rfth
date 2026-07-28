@@ -1,4 +1,4 @@
--- Qawafel: default-deny row level security on every table.
+-- Deeds tracker: default-deny row level security on every table.
 
 alter table app_users        enable row level security;
 alter table schedules        enable row level security;

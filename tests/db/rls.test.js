@@ -1,9 +1,9 @@
 import { it, expect, beforeAll, afterAll } from 'vitest';
 import { dbTest, serviceClient, anonClient, uniq, uniqSlug } from './client';
 
-const DOMAIN = 'qawafel.internal';
+const DOMAIN = 'tracker.internal';
 const PIN = '482913';
-const MGR_PASSWORD = 'Qawafel!2026';
+const MGR_PASSWORD = 'Deeds tracker!2026';
 
 dbTest('row level security', () => {
   const db = serviceClient();

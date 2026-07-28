@@ -35,6 +35,32 @@ and are recorded in the audit log as staff edits.
 `tests/db/scoring.test.js` runs all eight scoring cases through both the JavaScript and
 the SQL engine and fails if they ever disagree.
 
+## Passkeys / biometric sign-in
+
+Staff may enrol a passkey as a faster alternative to their password. The password
+always remains valid — a passkey is an addition, never a replacement, so losing a
+device never locks anyone out. Students are deliberately excluded: they share
+devices and pick their name from a list, so a device-bound credential would end up
+attached to the wrong person.
+
+Verification uses `@simplewebauthn/server`; none of the CBOR parsing or signature
+checking is hand-written.
+
+| Threat | Control |
+|---|---|
+| Phishing a credential onto another domain | The RP ID comes from `WEBAUTHN_RP_ID` / `VERCEL_PROJECT_PRODUCTION_URL`, **never** the request's `Host` header, which a caller controls |
+| Replaying a captured assertion | `webauthn_take_challenge` deletes the challenge as it reads it, so every challenge is single-use and expires after 5 minutes |
+| A cloned authenticator | The signature counter must strictly advance; a regression is rejected and audit-logged as `passkey_counter_regression` |
+| Mere presence instead of a real biometric | `userVerification: 'required'` at both enrolment and login |
+| Forging an enrolment | `INSERT`/`UPDATE` on `webauthn_credentials` is revoked from `authenticated`; rows are only written by the route handler after the attestation verifies |
+| Account enumeration | Login uses discoverable credentials, so no username is submitted and the options response reveals nothing about who exists |
+| A revoked account signing in | The handler re-checks `app_users.is_active` after verification |
+
+The private key never leaves the device's secure element; the database stores only
+a public key. After a successful assertion the handler mints a real Supabase
+session by generating and immediately redeeming a single-use magiclink token
+server-side — the token is never returned to the browser.
+
 ## Brute force and rate limiting
 
 All limits live in Postgres (`rate_limits`, `auth_lockouts`) and are applied before any
@@ -51,6 +77,8 @@ credential check.
 | Grants | 200 / hour per user |
 | Export | 30 / hour per user |
 | Join-link lookup | 60 / 5 min per IP |
+| Passkey enrolment | 20 / hour per user |
+| Passkey login | 30 / 10 min per IP |
 
 A 6-digit PIN has a million combinations; at 10 attempts per 10 minutes with escalating
 lockout, exhaustive search is not practical.

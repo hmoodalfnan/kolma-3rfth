@@ -41,7 +41,12 @@ describe('proxy CSP', () => {
     expect(re.test('/_next/static/chunks/main.js')).toBe(false);
     expect(re.test('/sw.js')).toBe(false);
     expect(re.test('/manifest.webmanifest')).toBe(false);
+    expect(re.test('/icon-512.png')).toBe(false);
+    expect(re.test('/apple-touch-icon.png')).toBe(false);
+    expect(re.test('/favicon.svg')).toBe(false);
+
     expect(re.test('/login')).toBe(true);
     expect(re.test('/today')).toBe(true);
+    expect(re.test('/api/auth/login')).toBe(true);
   });
 });

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-const KEY = 'qawafel.theme';
+const KEY = 'tracker.theme';
 const OPTIONS = [
   { value: 'system', label: 'تلقائي' },
   { value: 'light', label: 'فاتح' },

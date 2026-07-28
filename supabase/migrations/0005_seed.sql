@@ -1,4 +1,4 @@
--- Qawafel: master question library seed and default criteria.
+-- Deeds tracker: master question library seed and default criteria.
 
 insert into question_library (section, title, type, config, points, sort_order) values
   ('السنن الرواتب', 'سنة الفجر (ركعتان)',          'bool', '{}', 5, 1),

@@ -1,4 +1,4 @@
--- Qawafel: rate limiting, login lockout, and the append-only audit log.
+-- Deeds tracker: rate limiting, login lockout, and the append-only audit log.
 
 create table rate_limits (
   key          text primary key,

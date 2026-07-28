@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { clientIp, sameOrigin, bearerToken } from '@/lib/http/request-context';
 
-const req = (headers, url = 'https://qawafel.app/api/x') =>
+const req = (headers, url = 'https://tracker.app/api/x') =>
   new Request(url, { method: 'POST', headers });
 
 describe('clientIp', () => {
@@ -21,7 +21,7 @@ describe('clientIp', () => {
 
 describe('sameOrigin', () => {
   it('accepts a same-origin request', () => {
-    expect(sameOrigin(req({ origin: 'https://qawafel.app' }))).toBe(true);
+    expect(sameOrigin(req({ origin: 'https://tracker.app' }))).toBe(true);
   });
 
   it('accepts sec-fetch-site same-origin without an Origin header', () => {

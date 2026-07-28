@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { applySession } from '@/lib/auth/session';
+import { PasskeyButton } from '@/components/auth/PasskeyButton';
 
 export function StaffLogin() {
   const router = useRouter();
@@ -75,6 +76,8 @@ export function StaffLogin() {
       <Button type="submit" loading={busy} className="w-full">
         دخول
       </Button>
+
+      <PasskeyButton onError={setError} />
 
       <p className="text-center text-xs text-muted">
         الطلاب يدخلون عبر رابط الرحلة الخاص بهم.

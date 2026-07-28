@@ -1,20 +1,53 @@
 {
-  "name": "قوافل — متابعة الأعمال",
-  "short_name": "قوافل",
+  "name": "سجل الأعمال",
+  "short_name": "سجل",
+  "description": "متابعة الأعمال الإيمانية والسلوكية",
   "start_url": "/today",
   "scope": "/",
+  "id": "/",
   "display": "standalone",
   "orientation": "portrait",
   "lang": "ar",
   "dir": "rtl",
-  "background_color": "#f7f8fb",
+  "background_color": "#F7F8FB",
   "theme_color": "#2A3563",
+  "categories": ["education", "lifestyle"],
   "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "سجل اليوم",
+      "short_name": "اليوم",
+      "url": "/today"
+    },
+    {
+      "name": "لوحة الصدارة",
+      "short_name": "الصدارة",
+      "url": "/board"
     }
   ]
 }

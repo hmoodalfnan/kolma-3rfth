@@ -28,8 +28,8 @@ describe('validateStudentPin', () => {
 
 describe('validateStaffPassword', () => {
   it('accepts eight or more characters spanning two class types', () => {
-    expect(validateStaffPassword('qawafel2026').ok).toBe(true);
-    expect(validateStaffPassword('Qawafel!').ok).toBe(true);
+    expect(validateStaffPassword('tracker2026').ok).toBe(true);
+    expect(validateStaffPassword('Deeds tracker!').ok).toBe(true);
   });
 
   it('rejects anything shorter than eight characters', () => {

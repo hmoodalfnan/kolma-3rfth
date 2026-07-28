@@ -1,4 +1,4 @@
--- Qawafel: transactional group point grants.
+-- Deeds tracker: transactional group point grants.
 
 create or replace function grant_group_points(
   p_schedule uuid, p_group uuid, p_criterion uuid,

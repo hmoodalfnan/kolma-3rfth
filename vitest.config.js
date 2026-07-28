@@ -17,6 +17,9 @@ export default defineConfig({
     include: ['tests/**/*.test.js'],
   },
   resolve: {
-    alias: { '@': path.resolve(process.cwd()) },
+    alias: {
+      '@': path.resolve(process.cwd()),
+      'server-only': path.resolve(process.cwd(), 'tests/stubs/server-only.js'),
+    },
   },
 });

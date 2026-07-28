@@ -1,4 +1,4 @@
--- Qawafel: cross-schedule views for the super-admin board.
+-- Deeds tracker: cross-schedule views for the super-admin board.
 
 -- Normalize an Arabic name so the same person in several schedules aggregates:
 -- strip diacritics and tatweel, unify alef/yeh/teh-marbuta forms, collapse spaces.

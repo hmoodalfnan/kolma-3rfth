@@ -88,7 +88,7 @@ export function ExportScreen() {
       });
 
       const safeName = current.name.replace(/[^\p{L}\p{N}_-]+/gu, '-').slice(0, 40);
-      downloadBlob(blob, `qawafel-${safeName}-${todayInRiyadh()}.xlsx`);
+      downloadBlob(blob, `tracker-${safeName}-${todayInRiyadh()}.xlsx`);
 
       await post('/api/audit/export', {
         scheduleId: current.id,

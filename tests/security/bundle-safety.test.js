@@ -119,6 +119,7 @@ describe('database migrations', () => {
       '0006_views.sql',
       '0007_grants.sql',
       '0008_global_views.sql',
+      '0009_webauthn.sql',
     ]);
   });
 

@@ -14,9 +14,9 @@ const { POST } = await import('@/app/api/auth/login/route');
 
 const post = (body, headers = {}) =>
   POST(
-    new Request('https://qawafel.app/api/auth/login', {
+    new Request('https://tracker.app/api/auth/login', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', origin: 'https://qawafel.app', ...headers },
+      headers: { 'content-type': 'application/json', origin: 'https://tracker.app', ...headers },
       body: JSON.stringify(body),
     }),
   );
@@ -35,7 +35,7 @@ beforeEach(() => {
 describe('POST /api/auth/login', () => {
   it('rejects a cross-site request before touching the database', async () => {
     const res = await post(
-      { mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' },
+      { mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' },
       { origin: 'https://evil.example' },
     );
     expect(res.status).toBe(403);
@@ -56,7 +56,7 @@ describe('POST /api/auth/login', () => {
     rpc.mockImplementation((name) =>
       name === 'rl_hit' ? Promise.resolve({ data: false }) : Promise.resolve({ data: null }),
     );
-    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' });
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' });
     expect(res.status).toBe(429);
     expect(signIn).not.toHaveBeenCalled();
   });
@@ -69,7 +69,7 @@ describe('POST /api/auth/login', () => {
       }
       return Promise.resolve({ data: null });
     });
-    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' });
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' });
     expect(res.status).toBe(429);
     expect(signIn).not.toHaveBeenCalled();
   });
@@ -115,7 +115,7 @@ describe('POST /api/auth/login', () => {
       }),
     });
 
-    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' });
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' });
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -139,7 +139,7 @@ describe('POST /api/auth/login', () => {
       }),
     });
     expect(
-      (await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' })).status,
+      (await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' })).status,
     ).toBe(403);
   });
 
@@ -197,8 +197,8 @@ describe('POST /api/auth/login', () => {
 
   it('never leaks the submitted password into the audit payload', async () => {
     signIn.mockResolvedValue({ data: {}, error: { message: 'Invalid login credentials' } });
-    await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' });
+    await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' });
     const auditCalls = rpc.mock.calls.filter(([name]) => name === 'write_audit');
-    expect(JSON.stringify(auditCalls)).not.toMatch(/Qawafel!2026/);
+    expect(JSON.stringify(auditCalls)).not.toMatch(/Deeds tracker!2026/);
   });
 });

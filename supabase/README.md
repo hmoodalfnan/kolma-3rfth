@@ -11,12 +11,37 @@ Paste one file, press Run, wait for `Success. No rows returned`, then move to th
 6. `migrations/0006_views.sql` — leaderboard views
 7. `migrations/0007_grants.sql` — transactional point grants
 8. `migrations/0008_global_views.sql` — cross-schedule views
+9. `migrations/0009_webauthn.sql` — passkey / biometric sign-in for staff
+
+## If you set up before the rename
+
+The synthetic auth domain changed from `qawafel.internal` to `tracker.internal`.
+Accounts created under the old domain still work **only** while the Vercel
+environment variable `AUTH_EMAIL_DOMAIN` is still set to `qawafel.internal`.
+
+To finish the rename, set `AUTH_EMAIL_DOMAIN=tracker.internal` in Vercel **and**
+run this once:
+
+```sql
+update auth.users
+set email = replace(email, '@qawafel.internal', '@tracker.internal')
+where email like '%@qawafel.internal';
+```
+
+Verify nothing was missed:
+
+```sql
+select count(*) from auth.users where email like '%@qawafel.internal';
+```
+
+Expected: `0`. Do these two things together — changing only one of them locks
+everyone out until the other is done.
 
 ## Creating the super admin
 
 Create the auth user in **Authentication → Users → Add user**:
 
-- Email: `mohammed@qawafel.internal`
+- Email: `mohammed@tracker.internal`
 - Password: your choice, at least 8 characters with two character classes
 - Tick **Auto Confirm User**
 
@@ -25,7 +50,7 @@ Then run in the SQL editor:
 ```sql
 insert into app_users (id, username, display_name, role)
 select id, 'mohammed', 'محمد', 'super_admin'
-from auth.users where email = 'mohammed@qawafel.internal';
+from auth.users where email = 'mohammed@tracker.internal';
 ```
 
 Verify:

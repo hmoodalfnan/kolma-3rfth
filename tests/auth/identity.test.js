@@ -21,23 +21,23 @@ describe('normalizeUsername', () => {
 
 describe('staffEmail', () => {
   it('maps a username onto the internal domain', () => {
-    expect(staffEmail('mohammed')).toBe('mohammed@qawafel.internal');
+    expect(staffEmail('mohammed')).toBe('mohammed@tracker.internal');
   });
 
   it('normalizes before mapping so casing cannot fork an identity', () => {
-    expect(staffEmail('MOHAMMED')).toBe('mohammed@qawafel.internal');
+    expect(staffEmail('MOHAMMED')).toBe('mohammed@tracker.internal');
   });
 });
 
 describe('studentEmail', () => {
   it('derives a stable address from the student id', () => {
     const id = '8f1c2a3b-4d5e-6f70-8192-a3b4c5d6e7f8';
-    expect(studentEmail(id)).toBe(`stu_${id}@qawafel.internal`);
+    expect(studentEmail(id)).toBe(`stu_${id}@tracker.internal`);
   });
 });
 
 describe('usernameFromEmail', () => {
   it('reverses staffEmail', () => {
-    expect(usernameFromEmail('mohammed@qawafel.internal')).toBe('mohammed');
+    expect(usernameFromEmail('mohammed@tracker.internal')).toBe('mohammed');
   });
 });

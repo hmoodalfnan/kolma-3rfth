@@ -6,7 +6,7 @@ export default function AuthLayout({ children }) {
       <div className="geo-texture flex min-h-dvh items-center justify-center px-4 py-10">
         <main className="w-full max-w-md">
           <header className="mb-6 text-center">
-            <h1 className="text-2xl font-bold text-navy-700">قوافل</h1>
+            <h1 className="text-2xl font-bold text-navy-700">سجل الأعمال</h1>
             <p className="mt-1 text-sm text-muted">متابعة الأعمال الإيمانية والسلوكية</p>
           </header>
           {children}

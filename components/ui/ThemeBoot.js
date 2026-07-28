@@ -11,7 +11,7 @@ import { useEffect } from 'react';
 export function ThemeBoot() {
   useEffect(() => {
     try {
-      const theme = window.localStorage.getItem('qawafel.theme');
+      const theme = window.localStorage.getItem('tracker.theme');
       if (theme && theme !== 'system') {
         document.documentElement.setAttribute('data-theme', theme);
       }

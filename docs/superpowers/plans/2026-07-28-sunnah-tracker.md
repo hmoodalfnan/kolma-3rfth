@@ -1,4 +1,4 @@
-# Qawafel Faith & Conduct Tracker — Implementation Plan
+# Deeds tracker Faith & Conduct Tracker — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -345,7 +345,7 @@ const arabic = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata = {
-  title: 'قوافل — متابعة الأعمال',
+  title: 'سجل الأعمال',
   description: 'متابعة الأعمال الإيمانية والسلوكية',
 };
 
@@ -437,7 +437,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR-ANON-KEY
 SUPABASE_SERVICE_ROLE_KEY=YOUR-SERVICE-ROLE-KEY
 
 # Internal email domain used to synthesize Supabase Auth identities.
-AUTH_EMAIL_DOMAIN=qawafel.internal
+AUTH_EMAIL_DOMAIN=tracker.internal
 
 # Optional: enables the env-gated database integration tests.
 SUPABASE_TEST_URL=
@@ -1604,8 +1604,8 @@ describe('validateStudentPin', () => {
 
 describe('validateStaffPassword', () => {
   it('accepts eight or more characters spanning two class types', () => {
-    expect(validateStaffPassword('qawafel2026').ok).toBe(true);
-    expect(validateStaffPassword('Qawafel!').ok).toBe(true);
+    expect(validateStaffPassword('tracker2026').ok).toBe(true);
+    expect(validateStaffPassword('Deeds tracker!').ok).toBe(true);
   });
 
   it('rejects anything shorter than eight characters', () => {
@@ -1661,7 +1661,7 @@ Create `lib/auth/password.js`:
 const COMMON = new Set([
   'password', 'password1', 'password123', '12345678', '123456789', '1234567890',
   'qwertyui', 'admin123', 'admin1234', 'iloveyou', 'letmein1', 'welcome1',
-  'qawafel', 'qawafel1', 'abc12345', '11111111', 'passw0rd',
+  'tracker', 'tracker1', 'abc12345', '11111111', 'passw0rd',
 ]);
 
 export function validateStaffPassword(pw) {
@@ -1931,7 +1931,7 @@ Expected: the suite reports **skipped** with the `[db tests] skipped` warning, b
 Create `supabase/migrations/0001_schema.sql`:
 
 ```sql
--- Qawafel: core schema
+-- Deeds tracker: core schema
 create extension if not exists pgcrypto;
 
 create type app_role_t       as enum ('super_admin', 'manager');
@@ -2266,7 +2266,7 @@ Expected: skipped until Supabase credentials exist.
 Create `supabase/migrations/0002_functions.sql`:
 
 ```sql
--- Qawafel: scoring, identity helpers, and write guards.
+-- Deeds tracker: scoring, identity helpers, and write guards.
 -- Named app_role() rather than current_role() to avoid the PostgreSQL built-in.
 
 create or replace function app_score_answer(
@@ -2561,7 +2561,7 @@ import { dbTest, serviceClient, uniq } from './client';
 
 const anonUrl = process.env.SUPABASE_TEST_URL;
 const anonKey = process.env.SUPABASE_TEST_ANON_KEY;
-const DOMAIN = 'qawafel.internal';
+const DOMAIN = 'tracker.internal';
 
 function anonClient() {
   return createClient(anonUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -2598,14 +2598,14 @@ dbTest('row level security', () => {
 
     const mgrEmail = `${uniq('mgr')}@${DOMAIN}`;
     const mgr = await db.auth.admin.createUser({
-      email: mgrEmail, password: 'Qawafel!2026', email_confirm: true,
+      email: mgrEmail, password: 'Deeds tracker!2026', email_confirm: true,
     });
     await db.from('app_users').insert({
       id: mgr.data.user.id, username: mgrEmail.split('@')[0], display_name: 'مشرف', role: 'manager',
     });
     await db.from('schedule_staff').insert({ schedule_id: ctx.schedule_a, user_id: mgr.data.user.id });
     ctx.manager_email = mgrEmail;
-    ctx.manager_password = 'Qawafel!2026';
+    ctx.manager_password = 'Deeds tracker!2026';
   });
 
   afterAll(async () => {
@@ -2699,7 +2699,7 @@ Expected: skipped until credentials exist.
 Create `supabase/migrations/0003_rls.sql`:
 
 ```sql
--- Qawafel: default-deny row level security on every table.
+-- Deeds tracker: default-deny row level security on every table.
 
 alter table app_users        enable row level security;
 alter table schedules        enable row level security;
@@ -2970,7 +2970,7 @@ Expected: both skipped until credentials exist.
 Create `supabase/migrations/0004_rate_limit_audit.sql`:
 
 ```sql
--- Qawafel: rate limiting, login lockout, and the append-only audit log.
+-- Deeds tracker: rate limiting, login lockout, and the append-only audit log.
 
 create table rate_limits (
   key          text primary key,
@@ -3128,7 +3128,7 @@ nineteen items from the original programme, plus the four default evaluation cri
 whenever a schedule is created.
 
 ```sql
--- Qawafel: master question library seed.
+-- Deeds tracker: master question library seed.
 
 insert into question_library (section, title, type, config, points, sort_order) values
   ('السنن الرواتب', 'سنة الفجر (ركعتان)',              'bool', '{}', 5, 1),
@@ -3188,7 +3188,7 @@ Run the migrations in order in **Supabase Dashboard → SQL Editor**:
 
 Create the auth user in **Authentication → Users → Add user**:
 
-- Email: `mohammed@qawafel.internal`
+- Email: `mohammed@tracker.internal`
 - Password: choose one, at least 8 characters with two character classes
 - Tick **Auto Confirm User**
 
@@ -3197,7 +3197,7 @@ Then run in the SQL editor:
 ```sql
 insert into app_users (id, username, display_name, role)
 select id, 'mohammed', 'محمد', 'super_admin'
-from auth.users where email = 'mohammed@qawafel.internal';
+from auth.users where email = 'mohammed@tracker.internal';
 ```
 
 Verify:
@@ -3236,7 +3236,7 @@ git commit -m "feat(db): rate limiting, lockout, append-only audit log, and seed
 
 **Interfaces:**
 - Produces:
-  - `getBrowserClient() -> SupabaseClient` — singleton, `persistSession: true`, `storageKey: 'qawafel.session'`
+  - `getBrowserClient() -> SupabaseClient` — singleton, `persistSession: true`, `storageKey: 'tracker.session'`
   - `createServiceClient() -> SupabaseClient` — server only; throws if called where `SUPABASE_SERVICE_ROLE_KEY` is absent
   - `createRequestClient(accessToken) -> SupabaseClient` — anon key plus the caller's bearer token, so RLS applies
   - `staffEmail(username) -> string`, `studentEmail(studentId) -> string`, `usernameFromEmail(email) -> string`
@@ -3265,24 +3265,24 @@ describe('normalizeUsername', () => {
 
 describe('staffEmail', () => {
   it('maps a username onto the internal domain', () => {
-    expect(staffEmail('mohammed')).toBe('mohammed@qawafel.internal');
+    expect(staffEmail('mohammed')).toBe('mohammed@tracker.internal');
   });
 
   it('normalizes before mapping so casing cannot fork an identity', () => {
-    expect(staffEmail('MOHAMMED')).toBe('mohammed@qawafel.internal');
+    expect(staffEmail('MOHAMMED')).toBe('mohammed@tracker.internal');
   });
 });
 
 describe('studentEmail', () => {
   it('derives a stable address from the student id', () => {
     const id = '8f1c2a3b-4d5e-6f70-8192-a3b4c5d6e7f8';
-    expect(studentEmail(id)).toBe(`stu_${id}@qawafel.internal`);
+    expect(studentEmail(id)).toBe(`stu_${id}@tracker.internal`);
   });
 });
 
 describe('usernameFromEmail', () => {
   it('reverses staffEmail', () => {
-    expect(usernameFromEmail('mohammed@qawafel.internal')).toBe('mohammed');
+    expect(usernameFromEmail('mohammed@tracker.internal')).toBe('mohammed');
   });
 });
 ```
@@ -3298,7 +3298,7 @@ Expected: FAIL — module not found.
 Create `lib/auth/identity.js`:
 
 ```js
-export const AUTH_DOMAIN = process.env.AUTH_EMAIL_DOMAIN || 'qawafel.internal';
+export const AUTH_DOMAIN = process.env.AUTH_EMAIL_DOMAIN || 'tracker.internal';
 
 const USERNAME_RE = /^[a-z0-9_]{3,32}$/;
 
@@ -3347,7 +3347,7 @@ export function getBrowserClient() {
           persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: false,
-          storageKey: 'qawafel.session',
+          storageKey: 'tracker.session',
         },
       },
     );
@@ -3395,7 +3395,7 @@ Create `tests/http/request-context.test.js`:
 import { describe, it, expect } from 'vitest';
 import { clientIp, sameOrigin, bearerToken } from '@/lib/http/request-context';
 
-const req = (headers, url = 'https://qawafel.app/api/x') =>
+const req = (headers, url = 'https://tracker.app/api/x') =>
   new Request(url, { method: 'POST', headers });
 
 describe('clientIp', () => {
@@ -3415,7 +3415,7 @@ describe('clientIp', () => {
 
 describe('sameOrigin', () => {
   it('accepts a same-origin request', () => {
-    expect(sameOrigin(req({ origin: 'https://qawafel.app' }))).toBe(true);
+    expect(sameOrigin(req({ origin: 'https://tracker.app' }))).toBe(true);
   });
 
   it('accepts sec-fetch-site same-origin without an Origin header', () => {
@@ -3550,9 +3550,9 @@ vi.mock('@/lib/supabase/server', () => ({
 const { POST } = await import('@/app/api/auth/login/route');
 
 const post = (body, headers = {}) =>
-  POST(new Request('https://qawafel.app/api/auth/login', {
+  POST(new Request('https://tracker.app/api/auth/login', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', origin: 'https://qawafel.app', ...headers },
+    headers: { 'content-type': 'application/json', origin: 'https://tracker.app', ...headers },
     body: JSON.stringify(body),
   }));
 
@@ -3569,7 +3569,7 @@ beforeEach(() => {
 
 describe('POST /api/auth/login', () => {
   it('rejects a cross-site request before touching the database', async () => {
-    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' }, {
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' }, {
       origin: 'https://evil.example',
     });
     expect(res.status).toBe(403);
@@ -3590,7 +3590,7 @@ describe('POST /api/auth/login', () => {
     rpc.mockImplementation((name) => (name === 'rl_hit'
       ? Promise.resolve({ data: false })
       : Promise.resolve({ data: null })));
-    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' });
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' });
     expect(res.status).toBe(429);
     expect(signIn).not.toHaveBeenCalled();
   });
@@ -3603,7 +3603,7 @@ describe('POST /api/auth/login', () => {
       }
       return Promise.resolve({ data: null });
     });
-    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' });
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' });
     expect(res.status).toBe(429);
     expect(signIn).not.toHaveBeenCalled();
   });
@@ -3638,7 +3638,7 @@ describe('POST /api/auth/login', () => {
       }) }) }),
     });
 
-    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' });
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' });
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -3657,7 +3657,7 @@ describe('POST /api/auth/login', () => {
         data: { id: 'u1', role: 'manager', is_active: false },
       }) }) }),
     });
-    expect((await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' })).status).toBe(403);
+    expect((await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' })).status).toBe(403);
   });
 
   it('rejects a student whose id is not in the schedule named by the slug', async () => {
@@ -3952,7 +3952,7 @@ vi.mock('@/lib/supabase/server', () => ({
 const { GET } = await import('@/app/api/join/[slug]/route');
 
 const get = (slug) =>
-  GET(new Request(`https://qawafel.app/api/join/${slug}`), { params: Promise.resolve({ slug }) });
+  GET(new Request(`https://tracker.app/api/join/${slug}`), { params: Promise.resolve({ slug }) });
 
 beforeEach(() => {
   rpc.mockReset().mockResolvedValue({ data: true });
@@ -4282,7 +4282,7 @@ Create `lib/auth/session.js`:
 
 import { getBrowserClient } from '@/lib/supabase/browser';
 
-const ROLE_KEY = 'qawafel.role';
+const ROLE_KEY = 'tracker.role';
 
 export async function applySession({ session, role, displayName }) {
   await getBrowserClient().auth.setSession({
@@ -4369,7 +4369,7 @@ Assertion for the last point:
 
 ```js
 const auditCall = rpc.mock.calls.find(([name]) => name === 'write_audit');
-expect(JSON.stringify(auditCall[1])).not.toMatch(/482913|Qawafel!2026/);
+expect(JSON.stringify(auditCall[1])).not.toMatch(/482913|Deeds tracker!2026/);
 ```
 
 - [ ] **Step 2: Run it to verify it fails, then implement the route**
@@ -4644,7 +4644,7 @@ Build this **before** the daily sheet so the sheet can be written against the of
 - Test: `tests/offline/outbox.test.js`, `tests/offline/sync.test.js`
 
 **Interfaces:**
-- Produces (`lib/offline/db.js`): a Dexie database `qawafel` version 1 with stores
+- Produces (`lib/offline/db.js`): a Dexie database `tracker` version 1 with stores
   - `meta` — `key` (primary), `value`
   - `questions` — `id`, index `schedule_id`
   - `answers` — compound primary key `[student_id+question_id+entry_date]`, index `entry_date`
@@ -4746,7 +4746,7 @@ Create `lib/offline/db.js`:
 ```js
 import Dexie from 'dexie';
 
-export const db = new Dexie('qawafel');
+export const db = new Dexie('tracker');
 
 db.version(1).stores({
   meta: 'key',
@@ -5294,7 +5294,7 @@ the authorization question — and only then switch to the service client for th
 
 `JoinLinksPanel.js` — the schedule link and one link per group, each with a copy button, a QR code rendered locally as inline SVG (no external service), and a **تجديد الرابط** button that warns the old link stops working.
 
-`ScheduleSwitcher.js` — a dropdown in the manage layout listing the caller's schedules, persisting the selection in `localStorage` under `qawafel.schedule`.
+`ScheduleSwitcher.js` — a dropdown in the manage layout listing the caller's schedules, persisting the selection in `localStorage` under `tracker.schedule`.
 
 - [ ] **Step 6: Commit**
 
@@ -5669,7 +5669,7 @@ generated buffer back with ExcelJS round-trips the values.
 
 - [ ] **Step 3: Implement and build the panel**
 
-`ExportPanel.js` — checkboxes for which sheets to include, an optional date range, a group filter, and a **تصدير** button that fetches the data, builds the workbook in the browser, and triggers a download named `qawafel-<schedule>-<YYYY-MM-DD>.xlsx`. Exporting is audited with `action: 'export'` and the sheet list.
+`ExportPanel.js` — checkboxes for which sheets to include, an optional date range, a group filter, and a **تصدير** button that fetches the data, builds the workbook in the browser, and triggers a download named `tracker-<schedule>-<YYYY-MM-DD>.xlsx`. Exporting is audited with `action: 'export'` and the sheet list.
 
 - [ ] **Step 4: Commit**
 
@@ -5897,8 +5897,8 @@ git commit -m "feat(admin): global audit log with actor and schedule filters"
 ```js
 describe('chooseStrategy', () => {
   it('never caches API calls', () => {
-    expect(chooseStrategy(new Request('https://qawafel.app/api/auth/login'))).toBe('network-only');
-    expect(chooseStrategy(new Request('https://qawafel.app/api/join/abcdefghij'))).toBe('network-only');
+    expect(chooseStrategy(new Request('https://tracker.app/api/auth/login'))).toBe('network-only');
+    expect(chooseStrategy(new Request('https://tracker.app/api/join/abcdefghij'))).toBe('network-only');
   });
 
   it('never caches Supabase traffic', () => {
@@ -5906,16 +5906,16 @@ describe('chooseStrategy', () => {
   });
 
   it('caches immutable build assets first', () => {
-    expect(chooseStrategy(new Request('https://qawafel.app/_next/static/chunks/main.js'))).toBe('cache-first');
+    expect(chooseStrategy(new Request('https://tracker.app/_next/static/chunks/main.js'))).toBe('cache-first');
   });
 
   it('revalidates navigations in the background', () => {
-    const req = new Request('https://qawafel.app/today', { headers: { accept: 'text/html' } });
+    const req = new Request('https://tracker.app/today', { headers: { accept: 'text/html' } });
     expect(chooseStrategy(req)).toBe('stale-while-revalidate');
   });
 
   it('leaves non-GET requests uncached', () => {
-    expect(chooseStrategy(new Request('https://qawafel.app/today', { method: 'POST' }))).toBe('network-only');
+    expect(chooseStrategy(new Request('https://tracker.app/today', { method: 'POST' }))).toBe('network-only');
   });
 });
 ```
@@ -6021,7 +6021,7 @@ With the app deployed to a Vercel preview, run the Phase 2 database suite agains
 project and additionally confirm by hand, using the browser console on the student view:
 
 ```js
-const c = window.__qawafelClient; // exposed only in development builds
+const c = window.__trackerClient; // exposed only in development builds
 await c.from('students').select('*');           // expect: only the caller's schedule
 await c.from('audit_log').select('*');           // expect: []
 await c.from('app_users').select('*');           // expect: only the caller's own row, or []
