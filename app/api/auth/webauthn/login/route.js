@@ -1,3 +1,4 @@
+import { safeHandler } from '@/lib/http/safe-handler';
 import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
@@ -27,7 +28,7 @@ const schema = z.discriminatedUnion('action', [
   }).strict(),
 ]);
 
-export async function POST(request) {
+async function postHandler(request) {
   if (!sameOrigin(request)) return json({ error: 'طلب غير مسموح' }, 403);
 
   let raw;
@@ -176,3 +177,5 @@ export async function POST(request) {
     200,
   );
 }
+
+export const POST = safeHandler('app/api/auth/webauthn/login/route.js:POST', postHandler);

@@ -20,23 +20,36 @@ export function StaffLogin() {
     setBusy(true);
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mode: 'staff', username: username.trim().toLowerCase(), password }),
-      });
-      const body = await res.json();
+      let res;
+      try {
+        res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'staff',
+            username: username.trim().toLowerCase(),
+            password,
+          }),
+        });
+      } catch {
+        // Only a genuinely failed request lands here — this is the one case
+        // where blaming the connection is actually right.
+        setError('تعذّر الاتصال بالخادم، تحقّق من الإنترنت');
+        return;
+      }
+
+      // A crashed handler can return an empty body, so never let a parse failure
+      // masquerade as a network problem.
+      const body = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setError(body.error || 'تعذّر تسجيل الدخول');
+        setError(body.error || `تعذّر تسجيل الدخول (خطأ ${res.status})`);
         setPassword('');
         return;
       }
 
       await applySession(body);
       router.replace(body.redirect);
-    } catch {
-      setError('تعذّر الاتصال بالخادم، تحقّق من الإنترنت');
     } finally {
       setBusy(false);
     }

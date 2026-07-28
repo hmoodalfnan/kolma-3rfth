@@ -1,3 +1,4 @@
+import { safeHandler } from '@/lib/http/safe-handler';
 import { requireStaff, staffsSchedule } from '@/lib/http/guard';
 import { clientIp, userAgent, jsonResponse as json } from '@/lib/http/request-context';
 import { writeAudit } from '@/lib/audit/write';
@@ -28,7 +29,7 @@ const grantSchema = z
   })
   .strict();
 
-export async function POST(request) {
+async function postHandler(request) {
   const ctx = await requireStaff(request, { rateKey: 'grants', limit: 200 });
   if (ctx.response) return ctx.response;
   const { db, scoped, profile } = ctx;
@@ -98,7 +99,7 @@ export async function POST(request) {
   return json({ id: data }, 200);
 }
 
-export async function DELETE(request) {
+async function deleteHandler(request) {
   const ctx = await requireStaff(request, { rateKey: 'grants_delete', limit: 100 });
   if (ctx.response) return ctx.response;
   const { db, scoped, profile } = ctx;
@@ -132,3 +133,6 @@ export async function DELETE(request) {
 
   return json({ ok: true }, 200);
 }
+
+export const POST = safeHandler('app/api/grants/route.js:POST', postHandler);
+export const DELETE = safeHandler('app/api/grants/route.js:DELETE', deleteHandler);

@@ -1,3 +1,4 @@
+import { safeHandler } from '@/lib/http/safe-handler';
 import { requireStaff, staffsSchedule } from '@/lib/http/guard';
 import { clientIp, userAgent, jsonResponse as json } from '@/lib/http/request-context';
 import { writeAudit } from '@/lib/audit/write';
@@ -13,7 +14,7 @@ const schema = z
   })
   .strict();
 
-export async function POST(request) {
+async function postHandler(request) {
   const ctx = await requireStaff(request, { rateKey: 'export', limit: 30 });
   if (ctx.response) return ctx.response;
   const { db, scoped, profile } = ctx;
@@ -45,3 +46,5 @@ export async function POST(request) {
 
   return json({ ok: true }, 200);
 }
+
+export const POST = safeHandler('app/api/audit/export/route.js:POST', postHandler);

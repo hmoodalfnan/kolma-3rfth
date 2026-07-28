@@ -1,3 +1,4 @@
+import { safeHandler } from '@/lib/http/safe-handler';
 import { requireSuperAdmin } from '@/lib/http/guard';
 import { clientIp, userAgent, jsonResponse as json } from '@/lib/http/request-context';
 import { validateStaffPassword } from '@/lib/auth/password';
@@ -51,7 +52,7 @@ const bodySchema = z.discriminatedUnion('action', [
   assignSchema,
 ]);
 
-export async function POST(request) {
+async function postHandler(request) {
   const ctx = await requireSuperAdmin(request, { rateKey: 'staff', limit: 100 });
   if (ctx.response) return ctx.response;
   const { db, profile } = ctx;
@@ -183,3 +184,5 @@ export async function POST(request) {
   });
   return json({ ok: true }, 200);
 }
+
+export const POST = safeHandler('app/api/staff/route.js:POST', postHandler);

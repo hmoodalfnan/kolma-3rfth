@@ -1,3 +1,4 @@
+import { safeHandler } from '@/lib/http/safe-handler';
 import { requireStaff, staffsSchedule } from '@/lib/http/guard';
 import { clientIp, userAgent, jsonResponse as json } from '@/lib/http/request-context';
 import { generateSlug } from '@/lib/auth/password';
@@ -20,7 +21,7 @@ const cloneSchema = z
   })
   .strict();
 
-export async function POST(request) {
+async function postHandler(request) {
   const ctx = await requireStaff(request, { rateKey: 'clone', limit: 20 });
   if (ctx.response) return ctx.response;
   const { db, scoped, profile } = ctx;
@@ -109,3 +110,5 @@ export async function POST(request) {
 
   return json({ id: newId }, 200);
 }
+
+export const POST = safeHandler('app/api/schedules/clone/route.js:POST', postHandler);

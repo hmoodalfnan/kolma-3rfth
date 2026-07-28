@@ -1,3 +1,4 @@
+import { safeHandler } from '@/lib/http/safe-handler';
 import { requireStaff, staffsSchedule } from '@/lib/http/guard';
 import { clientIp, userAgent, jsonResponse as json } from '@/lib/http/request-context';
 import { createStudentsSchema } from '@/lib/validation/students';
@@ -8,7 +9,7 @@ import { writeAudit } from '@/lib/audit/write';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(request) {
+async function postHandler(request) {
   const ctx = await requireStaff(request, { rateKey: 'students_create', limit: 40 });
   if (ctx.response) return ctx.response;
   const { db, scoped, profile } = ctx;
@@ -97,3 +98,5 @@ export async function POST(request) {
 
   return json({ created }, 200);
 }
+
+export const POST = safeHandler('app/api/students/create/route.js:POST', postHandler);

@@ -1,3 +1,4 @@
+import { safeHandler } from '@/lib/http/safe-handler';
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -50,7 +51,7 @@ async function requireStaffUser(request) {
   return { db, profile, user: auth.user };
 }
 
-export async function POST(request) {
+async function postHandler(request) {
   if (!sameOrigin(request)) return json({ error: 'طلب غير مسموح' }, 403);
 
   const ctx = await requireStaffUser(request);
@@ -165,3 +166,5 @@ export async function POST(request) {
 
   return json({ ok: true }, 200);
 }
+
+export const POST = safeHandler('app/api/auth/webauthn/register/route.js:POST', postHandler);

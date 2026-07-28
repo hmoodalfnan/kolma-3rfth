@@ -1,3 +1,4 @@
+import { safeHandler } from '@/lib/http/safe-handler';
 import { createServiceClient } from '@/lib/supabase/server';
 import { clientIp, sameOrigin, userAgent, jsonResponse as json } from '@/lib/http/request-context';
 import { loginSchema } from '@/lib/validation/auth';
@@ -9,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 const GENERIC = 'بيانات الدخول غير صحيحة';
 
-export async function POST(request) {
+async function postHandler(request) {
   if (!sameOrigin(request)) return json({ error: 'طلب غير مسموح' }, 403);
 
   let raw;
@@ -154,3 +155,5 @@ export async function POST(request) {
     200,
   );
 }
+
+export const POST = safeHandler('app/api/auth/login/route.js:POST', postHandler);

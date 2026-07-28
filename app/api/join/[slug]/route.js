@@ -1,3 +1,4 @@
+import { safeHandler } from '@/lib/http/safe-handler';
 import { createServiceClient } from '@/lib/supabase/server';
 import { clientIp, jsonResponse as json } from '@/lib/http/request-context';
 
@@ -6,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 const SLUG_RE = /^[0-9a-z]{10,32}$/;
 
-export async function GET(request, { params }) {
+async function getHandler(request, { params }) {
   const { slug } = await params;
   if (!SLUG_RE.test(slug ?? '')) return json({ error: 'الرابط غير صالح' }, 400);
 
@@ -76,3 +77,5 @@ export async function GET(request, { params }) {
     200,
   );
 }
+
+export const GET = safeHandler('app/api/join/[slug]/route.js:GET', getHandler);

@@ -1,3 +1,4 @@
+import { safeHandler } from '@/lib/http/safe-handler';
 import { createServiceClient, createRequestClient } from '@/lib/supabase/server';
 import {
   clientIp,
@@ -13,7 +14,7 @@ import { writeAudit } from '@/lib/audit/write';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(request) {
+async function postHandler(request) {
   if (!sameOrigin(request)) return json({ error: 'طلب غير مسموح' }, 403);
 
   const token = bearerToken(request);
@@ -99,3 +100,5 @@ export async function POST(request) {
 
   return json({ ok: true }, 200);
 }
+
+export const POST = safeHandler('app/api/auth/change-password/route.js:POST', postHandler);
