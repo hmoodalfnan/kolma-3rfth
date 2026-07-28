@@ -47,8 +47,19 @@ Open <http://localhost:3000/login> and sign in as `mohammed`.
 1. Push this repository to GitHub.
 2. [vercel.com/new](https://vercel.com/new) → import the repository. Vercel detects
    Next.js automatically; leave the build settings alone.
-3. Under **Environment Variables**, add all four variables from step 3 for
-   **Production, Preview, and Development**.
+3. Under **Environment Variables**, add these — exactly these names, for
+   **Production, Preview, and Development**:
+
+   | Name | Value |
+   |---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | your Supabase project URL |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the anon / publishable key |
+   | `SUPABASE_SERVICE_ROLE_KEY` | the service-role / secret key |
+   | `AUTH_EMAIL_DOMAIN` | `tracker.internal` |
+
+   **Do not set `SUPABASE_TEST_*` in Vercel.** Those are read only by the local
+   database test suite; the app ignores them, and setting them instead of the
+   three above leaves every page failing with a server error.
 4. Deploy.
 5. Go back to Supabase → **Authentication → URL Configuration** and set the Site URL to
    your new Vercel domain.
@@ -114,6 +125,11 @@ and redeploy — passkeys are bound to one domain and will not work on another.
 ---
 
 ## Troubleshooting
+
+**Start here: open `/api/health` on your deployment.** It reports which
+credentials the running build can actually see (names and booleans only — never a
+key), whether the database answers, and which commit is deployed. Almost every
+"it does not work" turns out to be visible there in one glance.
 
 **"بيانات الدخول غير صحيحة" for a user you just created.**
 Check that the auth user exists in **Authentication → Users** and that the matching row

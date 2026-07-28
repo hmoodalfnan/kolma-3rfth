@@ -35,6 +35,15 @@ export async function GET() {
     );
   }
 
+  // An easy trap: SUPABASE_TEST_* are read only by the database test harness,
+  // never by the app. Say so plainly rather than reporting a bare "missing".
+  const hasTestVars = Object.keys(process.env).some((k) => k.startsWith('SUPABASE_TEST_'));
+  if (hasTestVars && missing.length > 0) {
+    warnings.push(
+      'SUPABASE_TEST_* variables are set, but those are only read by the database test suite. The app needs NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY.',
+    );
+  }
+
   let database = 'not_checked';
   let detail = null;
 
