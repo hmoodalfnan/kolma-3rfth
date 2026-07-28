@@ -3225,3 +3225,1998 @@ git commit -m "feat(db): rate limiting, lockout, append-only audit log, and seed
 ```
 
 ---
+
+## Phase 3 — Authentication
+
+### Task 10: Supabase clients, identity mapping, and request context
+
+**Files:**
+- Create: `lib/supabase/browser.js`, `lib/supabase/server.js`, `lib/auth/identity.js`, `lib/http/request-context.js`
+- Test: `tests/auth/identity.test.js`, `tests/http/request-context.test.js`
+
+**Interfaces:**
+- Produces:
+  - `getBrowserClient() -> SupabaseClient` — singleton, `persistSession: true`, `storageKey: 'qawafel.session'`
+  - `createServiceClient() -> SupabaseClient` — server only; throws if called where `SUPABASE_SERVICE_ROLE_KEY` is absent
+  - `createRequestClient(accessToken) -> SupabaseClient` — anon key plus the caller's bearer token, so RLS applies
+  - `staffEmail(username) -> string`, `studentEmail(studentId) -> string`, `usernameFromEmail(email) -> string`
+  - `clientIp(request) -> string`, `sameOrigin(request) -> boolean`, `userAgent(request) -> string`
+
+- [ ] **Step 1: Write the failing identity test**
+
+Create `tests/auth/identity.test.js`:
+
+```js
+import { describe, it, expect } from 'vitest';
+import { staffEmail, studentEmail, usernameFromEmail, normalizeUsername } from '@/lib/auth/identity';
+
+describe('normalizeUsername', () => {
+  it('lowercases and trims', () => {
+    expect(normalizeUsername('  Mohammed  ')).toBe('mohammed');
+  });
+
+  it('rejects characters outside the allowed set', () => {
+    expect(() => normalizeUsername('mo hammed')).toThrow();
+    expect(() => normalizeUsername('mo@hammed')).toThrow();
+    expect(() => normalizeUsername('ab')).toThrow();
+    expect(() => normalizeUsername('a'.repeat(33))).toThrow();
+  });
+});
+
+describe('staffEmail', () => {
+  it('maps a username onto the internal domain', () => {
+    expect(staffEmail('mohammed')).toBe('mohammed@qawafel.internal');
+  });
+
+  it('normalizes before mapping so casing cannot fork an identity', () => {
+    expect(staffEmail('MOHAMMED')).toBe('mohammed@qawafel.internal');
+  });
+});
+
+describe('studentEmail', () => {
+  it('derives a stable address from the student id', () => {
+    const id = '8f1c2a3b-4d5e-6f70-8192-a3b4c5d6e7f8';
+    expect(studentEmail(id)).toBe(`stu_${id}@qawafel.internal`);
+  });
+});
+
+describe('usernameFromEmail', () => {
+  it('reverses staffEmail', () => {
+    expect(usernameFromEmail('mohammed@qawafel.internal')).toBe('mohammed');
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails, then implement**
+
+```bash
+npm test -- tests/auth/identity.test.js
+```
+
+Expected: FAIL — module not found.
+
+Create `lib/auth/identity.js`:
+
+```js
+export const AUTH_DOMAIN = process.env.AUTH_EMAIL_DOMAIN || 'qawafel.internal';
+
+const USERNAME_RE = /^[a-z0-9_]{3,32}$/;
+
+export function normalizeUsername(raw) {
+  const name = String(raw ?? '').trim().toLowerCase();
+  if (!USERNAME_RE.test(name)) {
+    throw new Error('اسم المستخدم يجب أن يكون بين 3 و 32 حرفاً إنجليزياً أو رقماً أو شرطة سفلية');
+  }
+  return name;
+}
+
+export function staffEmail(username) {
+  return `${normalizeUsername(username)}@${AUTH_DOMAIN}`;
+}
+
+export function studentEmail(studentId) {
+  return `stu_${studentId}@${AUTH_DOMAIN}`;
+}
+
+export function usernameFromEmail(email) {
+  return String(email ?? '').split('@')[0].toLowerCase();
+}
+```
+
+Because `AUTH_DOMAIN` is read at module load, the test must run with the default; do not set
+`AUTH_EMAIL_DOMAIN` in the test environment.
+
+- [ ] **Step 3: Implement the Supabase clients**
+
+Create `lib/supabase/browser.js`:
+
+```js
+'use client';
+
+import { createClient } from '@supabase/supabase-js';
+
+let client;
+
+export function getBrowserClient() {
+  if (!client) {
+    client = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+          storageKey: 'qawafel.session',
+        },
+      },
+    );
+  }
+  return client;
+}
+```
+
+Create `lib/supabase/server.js`:
+
+```js
+import 'server-only';
+import { createClient } from '@supabase/supabase-js';
+
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+/** Full-privilege client. Never import this from a client component. */
+export function createServiceClient() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
+  return createClient(URL, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+/** Anon client carrying the caller's token, so every query is still filtered by RLS. */
+export function createRequestClient(accessToken) {
+  return createClient(URL, ANON, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} },
+  });
+}
+```
+
+Install the guard package so a stray client-side import fails at build time:
+
+```bash
+npm install server-only
+```
+
+- [ ] **Step 4: Write the failing request-context test**
+
+Create `tests/http/request-context.test.js`:
+
+```js
+import { describe, it, expect } from 'vitest';
+import { clientIp, sameOrigin, bearerToken } from '@/lib/http/request-context';
+
+const req = (headers, url = 'https://qawafel.app/api/x') =>
+  new Request(url, { method: 'POST', headers });
+
+describe('clientIp', () => {
+  it('takes the first hop of x-forwarded-for', () => {
+    expect(clientIp(req({ 'x-forwarded-for': '203.0.113.7, 70.41.3.18' }))).toBe('203.0.113.7');
+  });
+
+  it('falls back to x-real-ip and then to empty', () => {
+    expect(clientIp(req({ 'x-real-ip': '198.51.100.4' }))).toBe('198.51.100.4');
+    expect(clientIp(req({}))).toBe('');
+  });
+
+  it('rejects a malformed forwarded value rather than trusting it', () => {
+    expect(clientIp(req({ 'x-forwarded-for': 'not-an-ip' }))).toBe('');
+  });
+});
+
+describe('sameOrigin', () => {
+  it('accepts a same-origin request', () => {
+    expect(sameOrigin(req({ origin: 'https://qawafel.app' }))).toBe(true);
+  });
+
+  it('accepts sec-fetch-site same-origin without an Origin header', () => {
+    expect(sameOrigin(req({ 'sec-fetch-site': 'same-origin' }))).toBe(true);
+  });
+
+  it('rejects a cross-site request', () => {
+    expect(sameOrigin(req({ origin: 'https://evil.example' }))).toBe(false);
+    expect(sameOrigin(req({ 'sec-fetch-site': 'cross-site' }))).toBe(false);
+  });
+
+  it('rejects a request with neither header', () => {
+    expect(sameOrigin(req({}))).toBe(false);
+  });
+});
+
+describe('bearerToken', () => {
+  it('extracts the token and ignores a malformed header', () => {
+    expect(bearerToken(req({ authorization: 'Bearer abc.def.ghi' }))).toBe('abc.def.ghi');
+    expect(bearerToken(req({ authorization: 'Basic abc' }))).toBe(null);
+    expect(bearerToken(req({}))).toBe(null);
+  });
+});
+```
+
+- [ ] **Step 5: Run it to verify it fails, then implement**
+
+```bash
+npm test -- tests/http/request-context.test.js
+```
+
+Expected: FAIL — module not found.
+
+Create `lib/http/request-context.js`:
+
+```js
+const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
+const IPV6 = /^[0-9a-f:]+$/i;
+
+function validIp(value) {
+  const ip = String(value ?? '').trim();
+  if (!ip) return '';
+  if (IPV4.test(ip) && ip.split('.').every((o) => Number(o) <= 255)) return ip;
+  if (ip.includes(':') && IPV6.test(ip)) return ip;
+  return '';
+}
+
+export function clientIp(request) {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const first = validIp(forwarded.split(',')[0]);
+    if (first) return first;
+  }
+  return validIp(request.headers.get('x-real-ip'));
+}
+
+export function userAgent(request) {
+  return (request.headers.get('user-agent') || '').slice(0, 400);
+}
+
+export function sameOrigin(request) {
+  const site = request.headers.get('sec-fetch-site');
+  if (site) return site === 'same-origin' || site === 'none';
+
+  const origin = request.headers.get('origin');
+  if (!origin) return false;
+  try {
+    return new URL(origin).origin === new URL(request.url).origin;
+  } catch {
+    return false;
+  }
+}
+
+export function bearerToken(request) {
+  const header = request.headers.get('authorization') || '';
+  const [scheme, token] = header.split(' ');
+  return scheme === 'Bearer' && token ? token : null;
+}
+```
+
+- [ ] **Step 6: Run both tests, then commit**
+
+```bash
+npm test -- tests/auth/identity.test.js tests/http/request-context.test.js
+```
+
+Expected: PASS, 15 tests.
+
+```bash
+git add lib/supabase lib/auth/identity.js lib/http tests/auth/identity.test.js tests/http package.json package-lock.json
+git commit -m "feat(auth): Supabase client factories, identity mapping, and request context helpers"
+```
+
+---
+
+### Task 11: Login route handler
+
+The single most security-sensitive file in the project.
+
+**Files:**
+- Create: `lib/validation/auth.js`, `lib/audit/write.js`, `app/api/auth/login/route.js`
+- Test: `tests/api/login.test.js`
+
+**Interfaces:**
+- Consumes: Task 9 RPCs, Task 10 clients and helpers, Task 5 password validators.
+- Produces: `POST /api/auth/login` accepting
+  `{ mode: 'staff', username, password }` or `{ mode: 'student', studentId, pin, slug }`,
+  returning `200 { session, role, mustChangePassword, redirect }` or a uniform error.
+- Produces: `writeAudit(client, entry)` from `lib/audit/write.js`.
+
+- [ ] **Step 1: Write the failing login test**
+
+Create `tests/api/login.test.js`. It exercises the handler directly with mocked Supabase
+modules, so it runs with no network:
+
+```js
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const rpc = vi.fn();
+const signIn = vi.fn();
+const from = vi.fn();
+
+vi.mock('@/lib/supabase/server', () => ({
+  createServiceClient: () => ({
+    rpc,
+    from,
+    auth: { signInWithPassword: signIn },
+  }),
+  createRequestClient: () => ({ rpc, from }),
+}));
+
+const { POST } = await import('@/app/api/auth/login/route');
+
+const post = (body, headers = {}) =>
+  POST(new Request('https://qawafel.app/api/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'https://qawafel.app', ...headers },
+    body: JSON.stringify(body),
+  }));
+
+beforeEach(() => {
+  rpc.mockReset();
+  signIn.mockReset();
+  from.mockReset();
+  rpc.mockImplementation((name) => {
+    if (name === 'rl_hit') return Promise.resolve({ data: true });
+    if (name === 'auth_check_lock') return Promise.resolve({ data: null });
+    return Promise.resolve({ data: null, error: null });
+  });
+});
+
+describe('POST /api/auth/login', () => {
+  it('rejects a cross-site request before touching the database', async () => {
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' }, {
+      origin: 'https://evil.example',
+    });
+    expect(res.status).toBe(403);
+    expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed body with 400 and no sign-in attempt', async () => {
+    const res = await post({ mode: 'staff', username: 'x' });
+    expect(res.status).toBe(400);
+    expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown mode', async () => {
+    expect((await post({ mode: 'root', username: 'a', password: 'b' })).status).toBe(400);
+  });
+
+  it('returns 429 when the IP rate limit is exhausted', async () => {
+    rpc.mockImplementation((name) => (name === 'rl_hit'
+      ? Promise.resolve({ data: false })
+      : Promise.resolve({ data: null })));
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' });
+    expect(res.status).toBe(429);
+    expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it('returns 429 while an identifier is locked out', async () => {
+    rpc.mockImplementation((name) => {
+      if (name === 'rl_hit') return Promise.resolve({ data: true });
+      if (name === 'auth_check_lock') {
+        return Promise.resolve({ data: new Date(Date.now() + 600_000).toISOString() });
+      }
+      return Promise.resolve({ data: null });
+    });
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' });
+    expect(res.status).toBe(429);
+    expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it('records a failure and returns a generic message on bad credentials', async () => {
+    signIn.mockResolvedValue({ data: {}, error: { message: 'Invalid login credentials' } });
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'WrongPass1' });
+    const body = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(body.error).toBe('بيانات الدخول غير صحيحة');
+    expect(body.error).not.toMatch(/Invalid login/);
+    expect(rpc).toHaveBeenCalledWith('auth_record_failure', expect.anything());
+  });
+
+  it('returns the same generic message for an unknown username as for a wrong password', async () => {
+    signIn.mockResolvedValue({ data: {}, error: { message: 'User not found' } });
+    const unknown = await (await post({ mode: 'staff', username: 'nobody', password: 'WrongPass1' })).json();
+    signIn.mockResolvedValue({ data: {}, error: { message: 'Invalid login credentials' } });
+    const wrong = await (await post({ mode: 'staff', username: 'mohammed', password: 'WrongPass1' })).json();
+    expect(unknown.error).toBe(wrong.error);
+  });
+
+  it('signs a manager in, clears the lockout, and reports their role', async () => {
+    signIn.mockResolvedValue({
+      data: { session: { access_token: 'tok', refresh_token: 'ref' }, user: { id: 'u1' } },
+      error: null,
+    });
+    from.mockReturnValue({
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({
+        data: { id: 'u1', role: 'manager', display_name: 'مشرف', is_active: true },
+      }) }) }),
+    });
+
+    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.role).toBe('manager');
+    expect(body.session.access_token).toBe('tok');
+    expect(rpc).toHaveBeenCalledWith('auth_reset_failures', expect.anything());
+    expect(rpc).toHaveBeenCalledWith('write_audit', expect.objectContaining({ p_action: 'login' }));
+  });
+
+  it('refuses a deactivated staff account even with the right password', async () => {
+    signIn.mockResolvedValue({
+      data: { session: { access_token: 'tok' }, user: { id: 'u1' } }, error: null,
+    });
+    from.mockReturnValue({
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({
+        data: { id: 'u1', role: 'manager', is_active: false },
+      }) }) }),
+    });
+    expect((await post({ mode: 'staff', username: 'mohammed', password: 'Qawafel!2026' })).status).toBe(403);
+  });
+
+  it('rejects a student whose id is not in the schedule named by the slug', async () => {
+    from.mockReturnValue({
+      select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }) }) }),
+    });
+    const res = await post({ mode: 'student', studentId: '8f1c2a3b-4d5e-6f70-8192-a3b4c5d6e7f8', pin: '482913', slug: 'abcdefghij' });
+    expect(res.status).toBe(401);
+    expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it('flags a student who must still change their PIN', async () => {
+    from.mockReturnValue({
+      select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({
+        data: { id: 's1', schedule_id: 'sch1', full_name: 'طالب', must_change_password: true, is_active: true },
+      }) }) }) }),
+    });
+    signIn.mockResolvedValue({
+      data: { session: { access_token: 'tok' }, user: { id: 'au1' } }, error: null,
+    });
+
+    const body = await (await post({
+      mode: 'student', studentId: '8f1c2a3b-4d5e-6f70-8192-a3b4c5d6e7f8', pin: '482913', slug: 'abcdefghij',
+    })).json();
+
+    expect(body.role).toBe('student');
+    expect(body.mustChangePassword).toBe(true);
+    expect(body.redirect).toBe('/change-password');
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+```bash
+npm test -- tests/api/login.test.js
+```
+
+Expected: FAIL — `@/app/api/auth/login/route` does not exist.
+
+- [ ] **Step 3: Implement the validation schemas**
+
+Create `lib/validation/auth.js`:
+
+```js
+import { z } from 'zod';
+
+const uuid = z.string().uuid();
+
+export const loginSchema = z.discriminatedUnion('mode', [
+  z.object({
+    mode: z.literal('staff'),
+    username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,32}$/),
+    password: z.string().min(8).max(128),
+  }).strict(),
+  z.object({
+    mode: z.literal('student'),
+    studentId: uuid,
+    pin: z.string().regex(/^[0-9]{6}$/),
+    slug: z.string().regex(/^[0-9a-z]{10,32}$/),
+  }).strict(),
+]);
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(6).max(128),
+  newPassword: z.string().min(6).max(128),
+}).strict();
+```
+
+- [ ] **Step 4: Implement the audit writer**
+
+Create `lib/audit/write.js`:
+
+```js
+import 'server-only';
+
+/**
+ * Fire-and-forget audit write. Never throws: a logging failure must not
+ * turn a successful user action into an error response.
+ */
+export async function writeAudit(client, entry) {
+  try {
+    await client.rpc('write_audit', {
+      p_actor_label: entry.actorLabel ?? '',
+      p_actor_role: entry.actorRole ?? 'anonymous',
+      p_schedule_id: entry.scheduleId ?? null,
+      p_entity_type: entry.entityType,
+      p_entity_id: entry.entityId ?? null,
+      p_action: entry.action,
+      p_before: entry.before ?? null,
+      p_after: entry.after ?? null,
+      p_ip: entry.ip ?? '',
+      p_user_agent: entry.userAgent ?? '',
+    });
+  } catch (err) {
+    console.error('[audit] write failed', entry.entityType, entry.action, err?.message);
+  }
+}
+```
+
+- [ ] **Step 5: Implement the login route**
+
+Create `app/api/auth/login/route.js`:
+
+```js
+import { createServiceClient } from '@/lib/supabase/server';
+import { clientIp, sameOrigin, userAgent } from '@/lib/http/request-context';
+import { loginSchema } from '@/lib/validation/auth';
+import { staffEmail, studentEmail } from '@/lib/auth/identity';
+import { writeAudit } from '@/lib/audit/write';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+const GENERIC = 'بيانات الدخول غير صحيحة';
+
+const json = (body, status) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+  });
+
+export async function POST(request) {
+  if (!sameOrigin(request)) return json({ error: 'طلب غير مسموح' }, 403);
+
+  let raw;
+  try {
+    raw = await request.json();
+  } catch {
+    return json({ error: 'طلب غير صالح' }, 400);
+  }
+
+  const parsed = loginSchema.safeParse(raw);
+  if (!parsed.success) return json({ error: 'طلب غير صالح' }, 400);
+  const input = parsed.data;
+
+  const db = createServiceClient();
+  const ip = clientIp(request);
+  const ua = userAgent(request);
+
+  // Per-IP throttle first, so an attacker cannot enumerate identifiers cheaply.
+  const ipGate = await db.rpc('rl_hit', {
+    p_key: `login:ip:${ip || 'unknown'}`, p_limit: 20, p_window_seconds: 600,
+  });
+  if (ipGate.data === false) return json({ error: 'محاولات كثيرة، حاول لاحقاً' }, 429);
+
+  const identifier = input.mode === 'staff' ? `staff:${input.username}` : `student:${input.studentId}`;
+
+  const lock = await db.rpc('auth_check_lock', { p_identifier: identifier });
+  if (lock.data) return json({ error: 'تم إيقاف الحساب مؤقتاً بسبب محاولات خاطئة' }, 429);
+
+  const idGate = await db.rpc('rl_hit', {
+    p_key: `login:id:${identifier}`, p_limit: 10, p_window_seconds: 600,
+  });
+  if (idGate.data === false) return json({ error: 'محاولات كثيرة، حاول لاحقاً' }, 429);
+
+  async function fail(reason) {
+    await db.rpc('auth_record_failure', { p_identifier: identifier });
+    await writeAudit(db, {
+      actorLabel: identifier, actorRole: 'anonymous',
+      entityType: 'auth', action: 'login_failed',
+      after: { reason }, ip, userAgent: ua,
+    });
+    return json({ error: GENERIC }, 401);
+  }
+
+  let email;
+  let student = null;
+
+  if (input.mode === 'student') {
+    // The student must belong to the schedule the join link names.
+    const { data } = await db
+      .from('students')
+      .select('id, schedule_id, full_name, must_change_password, is_active, schedules!inner(slug, status)')
+      .eq('id', input.studentId)
+      .eq('schedules.slug', input.slug)
+      .maybeSingle();
+
+    if (!data || data.is_active === false) return fail('student_not_in_schedule');
+    student = data;
+    email = studentEmail(input.studentId);
+  } else {
+    email = staffEmail(input.username);
+  }
+
+  const password = input.mode === 'student' ? input.pin : input.password;
+  const { data: auth, error } = await db.auth.signInWithPassword({ email, password });
+  if (error || !auth?.session) return fail('bad_credentials');
+
+  if (input.mode === 'staff') {
+    const { data: profile } = await db
+      .from('app_users')
+      .select('id, role, display_name, is_active')
+      .eq('id', auth.user.id)
+      .maybeSingle();
+
+    if (!profile) return fail('no_profile');
+    if (!profile.is_active) {
+      await writeAudit(db, {
+        actorLabel: input.username, actorRole: profile.role,
+        entityType: 'auth', action: 'login_blocked_inactive', ip, userAgent: ua,
+      });
+      return json({ error: 'الحساب معطّل' }, 403);
+    }
+
+    await db.rpc('auth_reset_failures', { p_identifier: identifier });
+    await writeAudit(db, {
+      actorLabel: input.username, actorRole: profile.role,
+      entityType: 'auth', entityId: profile.id, action: 'login', ip, userAgent: ua,
+    });
+
+    return json({
+      session: auth.session,
+      role: profile.role,
+      displayName: profile.display_name,
+      mustChangePassword: false,
+      redirect: profile.role === 'super_admin' ? '/admin/global-board' : '/schedules',
+    }, 200);
+  }
+
+  await db.rpc('auth_reset_failures', { p_identifier: identifier });
+  await writeAudit(db, {
+    actorLabel: student.full_name, actorRole: 'student', scheduleId: student.schedule_id,
+    entityType: 'auth', entityId: student.id, action: 'login', ip, userAgent: ua,
+  });
+
+  return json({
+    session: auth.session,
+    role: 'student',
+    displayName: student.full_name,
+    mustChangePassword: student.must_change_password,
+    redirect: student.must_change_password ? '/change-password' : '/today',
+  }, 200);
+}
+```
+
+Note the ordering: origin check, shape validation, IP throttle, lockout, identifier throttle,
+then and only then a credential check. Every failure path returns the identical `GENERIC`
+message, and the student path verifies schedule membership **before** attempting a sign-in so
+a valid PIN from another schedule cannot be replayed through someone else's link.
+
+- [ ] **Step 6: Run the login test to verify it passes**
+
+```bash
+npm test -- tests/api/login.test.js
+```
+
+Expected: PASS, 11 tests.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add lib/validation lib/audit app/api/auth tests/api
+git commit -m "feat(auth): hardened login route with rate limiting, lockout, and audit"
+```
+
+---
+
+### Task 12: Join link, student picker, and login screens
+
+**Files:**
+- Create: `app/api/join/[slug]/route.js`
+- Create: `app/(auth)/j/[slug]/page.js`, `app/(auth)/j/[slug]/StudentLogin.js`
+- Create: `app/(auth)/login/page.js`, `app/(auth)/login/StaffLogin.js`
+- Create: `components/ui/Button.js`, `components/ui/Field.js`, `components/ui/PinInput.js`, `components/ui/Skeleton.js`, `components/ui/Toast.js`
+- Create: `lib/auth/session.js`
+- Test: `tests/api/join.test.js`, `tests/ui/pin-input.test.js`
+
+**Interfaces:**
+- Consumes: Task 11's `POST /api/auth/login`; Task 10's clients.
+- Produces:
+  - `GET /api/join/:slug` → `200 { schedule: { name }, groups: [{ id, name }], students: [{ id, full_name, group_id }] }` or `404 { error }`. Returns **names only** — never PINs, never `auth_uid`.
+  - `lib/auth/session.js` exporting `applySession(session)`, `getStoredRole()`, `signOut()`, `useSession()`.
+  - `<PinInput value onChange length={6} />` — six single-digit boxes, LTR digit flow inside an RTL page, auto-advance, paste support, `inputMode="numeric"`.
+  - `<Skeleton className />`, `<Button variant tone loading />`, `<Field label error hint />`, `useToast()`.
+
+- [ ] **Step 1: Write the failing join-endpoint test**
+
+Create `tests/api/join.test.js`:
+
+```js
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const rpc = vi.fn();
+const from = vi.fn();
+
+vi.mock('@/lib/supabase/server', () => ({
+  createServiceClient: () => ({ rpc, from }),
+  createRequestClient: () => ({ rpc, from }),
+}));
+
+const { GET } = await import('@/app/api/join/[slug]/route');
+
+const get = (slug) =>
+  GET(new Request(`https://qawafel.app/api/join/${slug}`), { params: Promise.resolve({ slug }) });
+
+beforeEach(() => {
+  rpc.mockReset().mockResolvedValue({ data: true });
+  from.mockReset();
+});
+
+describe('GET /api/join/:slug', () => {
+  it('rejects a slug that does not match the allowed shape', async () => {
+    expect((await get('../../etc/passwd')).status).toBe(400);
+    expect((await get('SHORT')).status).toBe(400);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 for an unknown slug without revealing whether schedules exist', async () => {
+    from.mockReturnValue({
+      select: () => ({ or: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }) }),
+    });
+    const res = await get('abcdefghij');
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe('الرابط غير صالح');
+  });
+
+  it('returns only names, ids, and group labels for a valid link', async () => {
+    from.mockImplementation((table) => {
+      if (table === 'schedules') {
+        return { select: () => ({ or: () => ({ maybeSingle: () => Promise.resolve({
+          data: { id: 'sch1', name: 'رحلة الصيف', status: 'active' },
+        }) }) }) };
+      }
+      if (table === 'groups') {
+        return { select: () => ({ eq: () => ({ order: () => Promise.resolve({
+          data: [{ id: 'g1', name: 'غرفة 101' }],
+        }) }) }) };
+      }
+      return { select: () => ({ eq: () => ({ eq: () => ({ order: () => Promise.resolve({
+        data: [{ id: 's1', full_name: 'محمد علي', group_id: 'g1' }],
+      }) }) }) }) };
+    });
+
+    const body = await (await get('abcdefghij')).json();
+    expect(body.schedule.name).toBe('رحلة الصيف');
+    expect(body.students).toEqual([{ id: 's1', full_name: 'محمد علي', group_id: 'g1' }]);
+    expect(JSON.stringify(body)).not.toMatch(/auth_uid|pin|password/i);
+  });
+
+  it('throttles by IP', async () => {
+    rpc.mockResolvedValue({ data: false });
+    expect((await get('abcdefghij')).status).toBe(429);
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails, then implement the route**
+
+```bash
+npm test -- tests/api/join.test.js
+```
+
+Expected: FAIL — module not found.
+
+Create `app/api/join/[slug]/route.js`:
+
+```js
+import { createServiceClient } from '@/lib/supabase/server';
+import { clientIp } from '@/lib/http/request-context';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+const SLUG_RE = /^[0-9a-z]{10,32}$/;
+
+const json = (body, status) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+  });
+
+export async function GET(request, { params }) {
+  const { slug } = await params;
+  if (!SLUG_RE.test(slug ?? '')) return json({ error: 'الرابط غير صالح' }, 400);
+
+  const db = createServiceClient();
+  const gate = await db.rpc('rl_hit', {
+    p_key: `join:${clientIp(request) || 'unknown'}`, p_limit: 60, p_window_seconds: 300,
+  });
+  if (gate.data === false) return json({ error: 'محاولات كثيرة، حاول لاحقاً' }, 429);
+
+  // A slug may name a whole schedule or a single group inside one.
+  const { data: schedule } = await db
+    .from('schedules')
+    .select('id, name, status, groups!left(id)')
+    .or(`slug.eq.${slug},groups.join_slug.eq.${slug}`)
+    .maybeSingle();
+
+  if (!schedule) return json({ error: 'الرابط غير صالح' }, 404);
+
+  const { data: groupRow } = await db
+    .from('groups').select('id').eq('join_slug', slug).maybeSingle();
+
+  const { data: groups } = await db
+    .from('groups').select('id, name').eq('schedule_id', schedule.id).order('sort_order');
+
+  let query = db
+    .from('students')
+    .select('id, full_name, group_id')
+    .eq('schedule_id', schedule.id)
+    .eq('is_active', true);
+  if (groupRow) query = query.eq('group_id', groupRow.id);
+
+  const { data: students } = await query.order('sort_order').order('full_name');
+
+  return json({
+    schedule: { name: schedule.name, archived: schedule.status === 'archived' },
+    groups: groupRow ? (groups ?? []).filter((g) => g.id === groupRow.id) : (groups ?? []),
+    students: students ?? [],
+  }, 200);
+}
+```
+
+The response deliberately omits `schedule.id`: the client never needs it, and withholding it
+keeps the public surface to display data only.
+
+- [ ] **Step 3: Build the UI primitives**
+
+Create `components/ui/Skeleton.js`:
+
+```js
+export function Skeleton({ className = '' }) {
+  return (
+    <div
+      className={`animate-pulse rounded-lg bg-line/70 ${className}`}
+      aria-hidden="true"
+    />
+  );
+}
+
+export function SkeletonList({ rows = 5, className = 'h-14' }) {
+  return (
+    <div className="space-y-2" role="status" aria-label="جارٍ التحميل">
+      {Array.from({ length: rows }, (_, i) => <Skeleton key={i} className={className} />)}
+    </div>
+  );
+}
+```
+
+Create `components/ui/Button.js`:
+
+```js
+'use client';
+
+const TONES = {
+  primary: 'bg-navy-700 text-white hover:bg-navy-600 disabled:bg-navy-300',
+  gold: 'bg-gold-500 text-navy-900 hover:bg-gold-300 disabled:opacity-50',
+  ghost: 'bg-transparent text-navy-700 hover:bg-navy-50 disabled:opacity-50',
+  danger: 'bg-rose-600 text-white hover:bg-rose-500 disabled:opacity-50',
+};
+
+export function Button({ tone = 'primary', loading = false, children, className = '', ...rest }) {
+  return (
+    <button
+      {...rest}
+      disabled={rest.disabled || loading}
+      className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 font-semibold transition disabled:cursor-not-allowed ${TONES[tone]} ${className}`}
+    >
+      {loading && <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
+      {children}
+    </button>
+  );
+}
+```
+
+Create `components/ui/Field.js`:
+
+```js
+export function Field({ label, error, hint, htmlFor, children }) {
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={htmlFor} className="block text-sm font-semibold text-ink">{label}</label>
+      {children}
+      {hint && !error && <p className="text-xs text-muted">{hint}</p>}
+      {error && <p role="alert" className="text-xs font-semibold text-rose-600">{error}</p>}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 4: Write the failing PIN input test**
+
+Create `tests/ui/pin-input.test.js`:
+
+```js
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { PinInput } from '@/components/ui/PinInput';
+
+function Harness({ onChange = () => {} }) {
+  return <PinInput value="" onChange={onChange} length={6} label="الرمز" />;
+}
+
+describe('PinInput', () => {
+  it('renders one numeric box per digit', () => {
+    render(<Harness />);
+    const boxes = screen.getAllByRole('textbox');
+    expect(boxes).toHaveLength(6);
+    expect(boxes[0]).toHaveAttribute('inputmode', 'numeric');
+  });
+
+  it('accepts digits and reports the assembled value', async () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    await userEvent.type(screen.getAllByRole('textbox')[0], '4');
+    expect(onChange).toHaveBeenCalledWith('4');
+  });
+
+  it('ignores non-digit characters', async () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    await userEvent.type(screen.getAllByRole('textbox')[0], 'a');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('accepts a pasted six-digit code', async () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    const first = screen.getAllByRole('textbox')[0];
+    first.focus();
+    await userEvent.paste('482913');
+    expect(onChange).toHaveBeenCalledWith('482913');
+  });
+
+  it('strips non-digits from a pasted string', async () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    screen.getAllByRole('textbox')[0].focus();
+    await userEvent.paste('48-29-13');
+    expect(onChange).toHaveBeenCalledWith('482913');
+  });
+});
+```
+
+- [ ] **Step 5: Run it to verify it fails, then implement**
+
+```bash
+npm test -- tests/ui/pin-input.test.js
+```
+
+Expected: FAIL — module not found.
+
+Create `components/ui/PinInput.js`:
+
+```js
+'use client';
+
+import { useRef } from 'react';
+
+export function PinInput({ value = '', onChange, length = 6, label, disabled = false }) {
+  const refs = useRef([]);
+  const digits = value.padEnd(length, ' ').slice(0, length).split('');
+
+  const emit = (next) => onChange(next.join('').trimEnd());
+
+  function handleChange(index, raw) {
+    const digit = raw.replace(/\D/g, '').slice(-1);
+    if (!digit) return;
+
+    const next = [...digits];
+    next[index] = digit;
+    emit(next);
+    if (index < length - 1) refs.current[index + 1]?.focus();
+  }
+
+  function handleKeyDown(index, event) {
+    if (event.key !== 'Backspace') return;
+    event.preventDefault();
+
+    const next = [...digits];
+    if (next[index] !== ' ') {
+      next[index] = ' ';
+    } else if (index > 0) {
+      next[index - 1] = ' ';
+      refs.current[index - 1]?.focus();
+    }
+    emit(next);
+  }
+
+  function handlePaste(event) {
+    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
+    if (!pasted) return;
+    event.preventDefault();
+    emit(pasted.padEnd(length, ' ').split(''));
+    refs.current[Math.min(pasted.length, length - 1)]?.focus();
+  }
+
+  return (
+    <div className="flex justify-center gap-2" dir="ltr" role="group" aria-label={label}>
+      {digits.map((digit, index) => (
+        <input
+          // eslint-disable-next-line react/no-array-index-key
+          key={index}
+          ref={(el) => { refs.current[index] = el; }}
+          type="text"
+          role="textbox"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={1}
+          disabled={disabled}
+          aria-label={`${label} - الخانة ${index + 1}`}
+          value={digit.trim()}
+          onChange={(e) => handleChange(index, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(index, e)}
+          onPaste={handlePaste}
+          className="size-12 rounded-xl border border-line bg-panel text-center text-xl font-bold text-ink focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-500/30"
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 6: Implement session storage helpers**
+
+Create `lib/auth/session.js`:
+
+```js
+'use client';
+
+import { getBrowserClient } from '@/lib/supabase/browser';
+
+const ROLE_KEY = 'qawafel.role';
+
+export async function applySession({ session, role, displayName }) {
+  await getBrowserClient().auth.setSession({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+  });
+  window.localStorage.setItem(ROLE_KEY, JSON.stringify({ role, displayName }));
+}
+
+export function getStoredRole() {
+  try {
+    return JSON.parse(window.localStorage.getItem(ROLE_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+export async function signOut() {
+  await getBrowserClient().auth.signOut();
+  window.localStorage.removeItem(ROLE_KEY);
+  const { clearMirror } = await import('@/lib/offline/db');
+  await clearMirror();
+  window.location.href = '/login';
+}
+```
+
+`lib/offline/db.js` is created in Task 17; import it dynamically so this module does not
+depend on it existing yet. Until Task 17 lands, add a temporary stub
+`export async function clearMirror() {}` in `lib/offline/db.js`.
+
+- [ ] **Step 7: Build the two login screens**
+
+Create `app/(auth)/j/[slug]/page.js` — a server component that renders `<StudentLogin slug={slug} />` inside a centred card, with `<SkeletonList rows={4} />` as its `Suspense` fallback.
+
+Create `app/(auth)/j/[slug]/StudentLogin.js` (client component):
+- On mount, `fetch('/api/join/' + slug)`; while pending render `<SkeletonList rows={5} />`.
+- Show the schedule name, an optional group filter chip row, and a searchable student list (an `<input type="search">` filtering `full_name` client-side — necessary at 200 students).
+- Selecting a name reveals `<PinInput>` and a **دخول** button.
+- Submit posts to `/api/auth/login` with `{ mode: 'student', studentId, pin, slug }`, then calls `applySession(...)` and `router.replace(body.redirect)`.
+- On a non-200, show `body.error` in a `role="alert"` region and clear the PIN.
+- If `schedule.archived`, render a notice and disable the form.
+
+Create `app/(auth)/login/StaffLogin.js` (client component): username + password fields, posts `{ mode: 'staff', username, password }`, same session handling, redirects to `body.redirect`.
+
+- [ ] **Step 8: Run the suite and commit**
+
+```bash
+npm test && npm run lint && npm run build
+```
+
+Expected: all green.
+
+```bash
+git add app components lib/auth/session.js tests/api/join.test.js tests/ui
+git commit -m "feat(auth): join-link student picker, PIN input, and staff login screens"
+```
+
+---
+
+### Task 13: Forced and voluntary password change
+
+**Files:**
+- Create: `app/api/auth/change-password/route.js`, `app/(auth)/change-password/page.js`, `app/(auth)/change-password/ChangePasswordForm.js`
+- Test: `tests/api/change-password.test.js`
+
+**Interfaces:**
+- Consumes: `changePasswordSchema` (Task 11), `validateStudentPin` / `validateStaffPassword` (Task 5), `bearerToken` (Task 10).
+- Produces: `POST /api/auth/change-password` accepting `{ currentPassword, newPassword }` with the caller's bearer token, returning `200 { ok: true }` or an error. Clears `students.must_change_password` on success.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/api/change-password.test.js` covering, with the same mocking approach as Task 11:
+
+1. `403` when the request is cross-site.
+2. `401` when the `Authorization` header is missing or malformed.
+3. `400` when the new PIN is not six digits (student) — assert the response carries the Arabic policy message from `validateStudentPin`.
+4. `400` when a staff password is under eight characters or single-class.
+5. `400` when `newPassword === currentPassword`.
+6. `401` when the current password fails re-authentication, with `auth_record_failure` called.
+7. `429` when the per-user rate limit (5 per hour) is exhausted.
+8. `200` on success, asserting `auth.admin.updateUserById` was called, `must_change_password` was set to `false` for a student, and an audit entry with `action: 'password_change'` was written **without** either password value in `before`/`after`.
+
+Assertion for the last point:
+
+```js
+const auditCall = rpc.mock.calls.find(([name]) => name === 'write_audit');
+expect(JSON.stringify(auditCall[1])).not.toMatch(/482913|Qawafel!2026/);
+```
+
+- [ ] **Step 2: Run it to verify it fails, then implement the route**
+
+The handler must, in order: check `sameOrigin`; extract and verify the bearer token via
+`createRequestClient(token).auth.getUser()`; rate-limit on `pwchange:{userId}`; determine
+whether the caller is a student or staff by querying `students.auth_uid` then `app_users.id`;
+validate the new secret with the matching policy function; re-authenticate by calling
+`signInWithPassword` with the **current** password; call
+`createServiceClient().auth.admin.updateUserById(userId, { password: newPassword })`; set
+`must_change_password = false` for students; write the audit entry; return `{ ok: true }`.
+
+Never log, echo, or store either password value.
+
+- [ ] **Step 3: Build the form**
+
+`ChangePasswordForm.js` renders `<PinInput>` twice (new PIN, confirm PIN) for students, or two password fields for staff, chosen from `getStoredRole()`. Show the policy text inline as a hint. On success call `signOut()` — forcing a fresh login with the new secret proves it took effect — and route to the appropriate login page.
+
+- [ ] **Step 4: Run the suite and commit**
+
+```bash
+npm test -- tests/api/change-password.test.js
+```
+
+Expected: PASS, 8 tests.
+
+```bash
+git add app/api/auth/change-password app/\(auth\)/change-password tests/api/change-password.test.js
+git commit -m "feat(auth): forced and voluntary password change with re-authentication"
+```
+
+---
+
+### Task 14: Route guards and role-based shells
+
+**Files:**
+- Create: `lib/auth/guard.js`, `components/auth/RequireRole.js`
+- Create: `app/(student)/layout.js`, `app/(manage)/layout.js`, `app/(admin)/layout.js`
+- Modify: `app/page.js`
+- Test: `tests/auth/guard.test.js`
+
+**Interfaces:**
+- Produces:
+  - `homeFor(role) -> string` — `'/today'` | `'/schedules'` | `'/admin/global-board'`
+  - `canAccess(role, pathname) -> boolean`
+  - `<RequireRole allow={['manager','super_admin']}>` — client component that reads the Supabase session, verifies the role, and redirects when it does not match, rendering a skeleton while resolving.
+
+- [ ] **Step 1: Write the failing guard test**
+
+Create `tests/auth/guard.test.js`:
+
+```js
+import { describe, it, expect } from 'vitest';
+import { homeFor, canAccess } from '@/lib/auth/guard';
+
+describe('homeFor', () => {
+  it('routes each role to its landing page', () => {
+    expect(homeFor('student')).toBe('/today');
+    expect(homeFor('manager')).toBe('/schedules');
+    expect(homeFor('super_admin')).toBe('/admin/global-board');
+  });
+
+  it('sends an unknown or missing role to the staff login', () => {
+    expect(homeFor(null)).toBe('/login');
+    expect(homeFor('intruder')).toBe('/login');
+  });
+});
+
+describe('canAccess', () => {
+  it('keeps a student inside the student area', () => {
+    expect(canAccess('student', '/today')).toBe(true);
+    expect(canAccess('student', '/board')).toBe(true);
+    expect(canAccess('student', '/schedules')).toBe(false);
+    expect(canAccess('student', '/admin/global-log')).toBe(false);
+  });
+
+  it('lets a manager into the management area but not the admin area', () => {
+    expect(canAccess('manager', '/schedules')).toBe(true);
+    expect(canAccess('manager', '/questions')).toBe(true);
+    expect(canAccess('manager', '/admin/staff')).toBe(false);
+  });
+
+  it('lets a super admin everywhere', () => {
+    for (const path of ['/today', '/schedules', '/admin/staff', '/admin/global-log']) {
+      expect(canAccess('super_admin', path)).toBe(true);
+    }
+  });
+
+  it('allows the auth routes to every role including none', () => {
+    for (const role of ['student', 'manager', 'super_admin', null]) {
+      expect(canAccess(role, '/login')).toBe(true);
+      expect(canAccess(role, '/change-password')).toBe(true);
+      expect(canAccess(role, '/j/abcdefghij')).toBe(true);
+    }
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails, then implement**
+
+Create `lib/auth/guard.js`:
+
+```js
+const PUBLIC_PREFIXES = ['/login', '/change-password', '/j/'];
+const STUDENT_PREFIXES = ['/today', '/board', '/settings'];
+const MANAGE_PREFIXES = ['/schedules', '/students', '/questions', '/grading', '/boards', '/export', '/log'];
+const ADMIN_PREFIX = '/admin';
+
+const startsWithAny = (path, prefixes) => prefixes.some((p) => path === p || path.startsWith(p));
+
+export function homeFor(role) {
+  if (role === 'student') return '/today';
+  if (role === 'manager') return '/schedules';
+  if (role === 'super_admin') return '/admin/global-board';
+  return '/login';
+}
+
+export function canAccess(role, pathname) {
+  if (startsWithAny(pathname, PUBLIC_PREFIXES)) return true;
+  if (role === 'super_admin') return true;
+  if (role === 'student') return startsWithAny(pathname, STUDENT_PREFIXES);
+  if (role === 'manager') return startsWithAny(pathname, MANAGE_PREFIXES);
+  return false;
+}
+```
+
+Authorization is enforced by RLS in the database; `canAccess` only decides what to render,
+so a bypass here leaks no data.
+
+- [ ] **Step 3: Build RequireRole and the three layouts**
+
+`components/auth/RequireRole.js` (client): on mount, read `getBrowserClient().auth.getSession()`. While resolving, render `<SkeletonList rows={6} />`. If there is no session, `router.replace('/login')`. If `getStoredRole()` is absent or fails `canAccess`, `router.replace(homeFor(role))`. Otherwise render children.
+
+The three layouts wrap their children in `<RequireRole allow={...}>` and add the appropriate chrome: student → bottom navigation (اليوم / الصدارة / الإعدادات) plus `<OfflineBanner />` (Task 17); manage → a top bar with the schedule switcher and a horizontal tab strip; admin → the manage chrome plus admin-only tabs.
+
+`app/page.js` becomes a client component that redirects to `homeFor(getStoredRole()?.role)`.
+
+- [ ] **Step 4: Run the suite and commit**
+
+```bash
+npm test && npm run build
+```
+
+```bash
+git add lib/auth/guard.js components/auth app tests/auth/guard.test.js
+git commit -m "feat(auth): role-based route guards and per-area layouts"
+```
+
+---
+
+## Phase 4 — Student flow
+
+### Task 15: Question renderers
+
+**Files:**
+- Create: `components/questions/BoolQuestion.js`, `PerPrayerQuestion.js`, `SingleChoiceQuestion.js`, `MultiChoiceQuestion.js`, `CounterQuestion.js`, `RatingQuestion.js`, `TextQuestion.js`, `QuestionCard.js`, `index.js`
+- Test: `tests/ui/question-renderers.test.js`
+
+**Interfaces:**
+- Consumes: `PRAYERS`, `PRAYER_LABELS` (Task 2); `scoreAnswer`, `maxPoints` (Task 3).
+- Produces: `RENDERERS` — a frozen map from `question.type` to a component with the uniform prop contract:
+
+```js
+{
+  question,            // { id, title, help_text, type, config, points }
+  value,               // current value, or undefined
+  onChange,            // (nextValue) => void — fired on every interaction
+  disabled,            // boolean — true for archived schedules and out-of-window days
+}
+```
+
+- Produces: `<QuestionCard question value onChange disabled />` which picks the renderer, shows the title, help text, and an earned/max points chip, and renders a `<Skeleton>` for an unknown type instead of throwing.
+
+- [ ] **Step 1: Write the failing renderer test**
+
+Create `tests/ui/question-renderers.test.js`. One `describe` per type, each asserting:
+
+- The control renders with an accessible name equal to `question.title`.
+- Interacting calls `onChange` with the correct value shape for that type — `true` for bool, `{ fajr: true }` for per-prayer, the option `id` for single choice, an array for multi choice, a number for counter and rating, a string for text.
+- `disabled` blocks interaction: after a click, `onChange` was not called.
+- The points chip shows `scoreAnswer(...) / maxPoints(...)`.
+
+For `MultiChoiceQuestion`, include a test that toggling an already-selected option removes it from the array rather than duplicating it:
+
+```js
+it('removes an option that is toggled off', async () => {
+  const onChange = vi.fn();
+  render(<MultiChoiceQuestion question={multiQ} value={['a', 'b']} onChange={onChange} />);
+  await userEvent.click(screen.getByLabelText('أ'));
+  expect(onChange).toHaveBeenCalledWith(['b']);
+});
+```
+
+For `PerPrayerQuestion`, include a test that only the prayers named in `config.prayers` render:
+
+```js
+it('renders only the configured prayers', () => {
+  render(<PerPrayerQuestion question={{ ...prayerQ, config: { prayers: ['fajr', 'isha'], points_per_prayer: 2 } }} value={{}} onChange={() => {}} />);
+  expect(screen.getByLabelText('الفجر')).toBeInTheDocument();
+  expect(screen.queryByLabelText('العصر')).not.toBeInTheDocument();
+});
+```
+
+For `CounterQuestion`, include a test that the increment button stops at `config.max` and the decrement button stops at zero.
+
+For `RatingQuestion`, include a test that the stars are keyboard-operable (`role="radiogroup"` with arrow-key navigation), not click-only.
+
+- [ ] **Step 2: Run it to verify it fails, then implement each renderer**
+
+```bash
+npm test -- tests/ui/question-renderers.test.js
+```
+
+Expected: FAIL — modules not found.
+
+Implementation notes that the tests pin down:
+
+- Every control is at least 44px on its shortest side.
+- `BoolQuestion` is a single large tappable row, not a bare checkbox — the whole row is the label.
+- `CounterQuestion` uses `−` / `+` buttons plus a read-only numeric display; there is no free-text number entry, so no parsing edge cases reach `onChange`.
+- `RatingQuestion` renders `role="radiogroup"` with one `role="radio"` per star and handles `ArrowRight`/`ArrowLeft`.
+- `TextQuestion` uses a `<textarea>` with `maxLength={config.max_length}` and a live character counter.
+- No renderer calls `dangerouslySetInnerHTML`; all labels are text children.
+
+Create `components/questions/index.js`:
+
+```js
+import { BoolQuestion } from './BoolQuestion';
+import { PerPrayerQuestion } from './PerPrayerQuestion';
+import { SingleChoiceQuestion } from './SingleChoiceQuestion';
+import { MultiChoiceQuestion } from './MultiChoiceQuestion';
+import { CounterQuestion } from './CounterQuestion';
+import { RatingQuestion } from './RatingQuestion';
+import { TextQuestion } from './TextQuestion';
+
+export const RENDERERS = Object.freeze({
+  bool: BoolQuestion,
+  per_prayer: PerPrayerQuestion,
+  single_choice: SingleChoiceQuestion,
+  multi_choice: MultiChoiceQuestion,
+  counter: CounterQuestion,
+  rating: RatingQuestion,
+  text: TextQuestion,
+});
+
+export { QuestionCard } from './QuestionCard';
+```
+
+- [ ] **Step 3: Run the test, then commit**
+
+```bash
+npm test -- tests/ui/question-renderers.test.js
+```
+
+Expected: PASS.
+
+```bash
+git add components/questions tests/ui/question-renderers.test.js
+git commit -m "feat(student): accessible renderers for all seven question types"
+```
+
+---
+
+### Task 16: Offline store, outbox, and sync engine
+
+Build this **before** the daily sheet so the sheet can be written against the offline store from the start rather than retrofitted.
+
+**Files:**
+- Create: `lib/offline/db.js`, `lib/offline/outbox.js`, `lib/offline/sync.js`, `lib/offline/useOnline.js`
+- Create: `components/offline/OfflineBanner.js`
+- Modify: `lib/auth/session.js` (replace the temporary `clearMirror` stub import)
+- Test: `tests/offline/outbox.test.js`, `tests/offline/sync.test.js`
+
+**Interfaces:**
+- Produces (`lib/offline/db.js`): a Dexie database `qawafel` version 1 with stores
+  - `meta` — `key` (primary), `value`
+  - `questions` — `id`, index `schedule_id`
+  - `answers` — compound primary key `[student_id+question_id+entry_date]`, index `entry_date`
+  - `outbox` — `++seq`, unique index `key` where `key = student_id|question_id|entry_date`
+  - plus `clearMirror()`.
+- Produces (`lib/offline/outbox.js`):
+  - `enqueue({ studentId, questionId, entryDate, value, clientUpdatedAt, deviceId }) -> Promise<void>` — **replaces** any queued op with the same key
+  - `pending() -> Promise<Array<Op>>` ordered by `seq`
+  - `pendingCount() -> Promise<number>`
+  - `remove(seq) -> Promise<void>`
+- Produces (`lib/offline/sync.js`):
+  - `flush(client) -> Promise<{ pushed, rejected: Array<{ op, error }> }>`
+  - `mirror(client, { studentId, scheduleId, days }) -> Promise<void>`
+  - `startAutoSync(client)` — flushes on `online`, on `visibilitychange`, and every 60s while online; returns a teardown function.
+
+- [ ] **Step 1: Write the failing outbox test**
+
+Create `tests/offline/outbox.test.js`. Install the in-memory IndexedDB shim first:
+
+```bash
+npm install -D fake-indexeddb
+```
+
+Add `import 'fake-indexeddb/auto';` to the top of `vitest.setup.js`.
+
+```js
+import { describe, it, expect, beforeEach } from 'vitest';
+import { db, clearMirror } from '@/lib/offline/db';
+import { enqueue, pending, pendingCount, remove } from '@/lib/offline/outbox';
+
+const op = (over = {}) => ({
+  studentId: 's1', questionId: 'q1', entryDate: '2026-08-01',
+  value: true, clientUpdatedAt: '2026-08-01T10:00:00.000Z', deviceId: 'dev', ...over,
+});
+
+beforeEach(async () => { await clearMirror(); });
+
+describe('outbox', () => {
+  it('queues an operation and reports it as pending', async () => {
+    await enqueue(op());
+    expect(await pendingCount()).toBe(1);
+    expect((await pending())[0].value).toBe(true);
+  });
+
+  it('replaces rather than stacks when the same item is tapped again', async () => {
+    await enqueue(op({ value: true, clientUpdatedAt: '2026-08-01T10:00:00.000Z' }));
+    await enqueue(op({ value: false, clientUpdatedAt: '2026-08-01T10:00:05.000Z' }));
+
+    const queued = await pending();
+    expect(queued).toHaveLength(1);
+    expect(queued[0].value).toBe(false);
+    expect(queued[0].clientUpdatedAt).toBe('2026-08-01T10:00:05.000Z');
+  });
+
+  it('keeps operations for different days separate', async () => {
+    await enqueue(op({ entryDate: '2026-08-01' }));
+    await enqueue(op({ entryDate: '2026-08-02' }));
+    expect(await pendingCount()).toBe(2);
+  });
+
+  it('keeps operations for different questions separate', async () => {
+    await enqueue(op({ questionId: 'q1' }));
+    await enqueue(op({ questionId: 'q2' }));
+    expect(await pendingCount()).toBe(2);
+  });
+
+  it('preserves insertion order across distinct keys', async () => {
+    await enqueue(op({ questionId: 'q1' }));
+    await enqueue(op({ questionId: 'q2' }));
+    expect((await pending()).map((o) => o.questionId)).toEqual(['q1', 'q2']);
+  });
+
+  it('removes a single operation by sequence number', async () => {
+    await enqueue(op({ questionId: 'q1' }));
+    await enqueue(op({ questionId: 'q2' }));
+    const [first] = await pending();
+    await remove(first.seq);
+    expect((await pending()).map((o) => o.questionId)).toEqual(['q2']);
+  });
+
+  it('writes the value into the local answers mirror immediately', async () => {
+    await enqueue(op({ value: true }));
+    const local = await db.answers.get(['s1', 'q1', '2026-08-01']);
+    expect(local.value).toBe(true);
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails, then implement the store**
+
+```bash
+npm test -- tests/offline/outbox.test.js
+```
+
+Expected: FAIL — module not found.
+
+Create `lib/offline/db.js`:
+
+```js
+import Dexie from 'dexie';
+
+export const db = new Dexie('qawafel');
+
+db.version(1).stores({
+  meta: 'key',
+  questions: 'id, schedule_id',
+  answers: '[student_id+question_id+entry_date], entry_date, student_id',
+  outbox: '++seq, &key',
+});
+
+export const outboxKey = (studentId, questionId, entryDate) =>
+  `${studentId}|${questionId}|${entryDate}`;
+
+export async function clearMirror() {
+  await db.transaction('rw', db.meta, db.questions, db.answers, db.outbox, async () => {
+    await Promise.all([db.meta.clear(), db.questions.clear(), db.answers.clear(), db.outbox.clear()]);
+  });
+}
+```
+
+Create `lib/offline/outbox.js`:
+
+```js
+import { db, outboxKey } from './db';
+
+/**
+ * Queue a change and reflect it in the local mirror at once.
+ * Re-tapping the same item overwrites its queued op instead of adding another,
+ * so a student toggling a checkbox ten times offline still syncs one write.
+ */
+export async function enqueue({ studentId, questionId, entryDate, value, clientUpdatedAt, deviceId }) {
+  const key = outboxKey(studentId, questionId, entryDate);
+
+  await db.transaction('rw', db.outbox, db.answers, async () => {
+    const existing = await db.outbox.where('key').equals(key).first();
+    const record = {
+      key,
+      studentId,
+      questionId,
+      entryDate,
+      value,
+      clientUpdatedAt,
+      deviceId,
+    };
+
+    if (existing) {
+      await db.outbox.update(existing.seq, record);
+    } else {
+      await db.outbox.add(record);
+    }
+
+    await db.answers.put({
+      student_id: studentId,
+      question_id: questionId,
+      entry_date: entryDate,
+      value,
+      client_updated_at: clientUpdatedAt,
+      dirty: true,
+    });
+  });
+}
+
+export function pending() {
+  return db.outbox.orderBy('seq').toArray();
+}
+
+export function pendingCount() {
+  return db.outbox.count();
+}
+
+export function remove(seq) {
+  return db.outbox.delete(seq);
+}
+```
+
+- [ ] **Step 3: Write the failing sync test**
+
+Create `tests/offline/sync.test.js`:
+
+```js
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { db, clearMirror } from '@/lib/offline/db';
+import { enqueue, pendingCount } from '@/lib/offline/outbox';
+import { flush } from '@/lib/offline/sync';
+
+function fakeClient(behaviour) {
+  return {
+    from: () => ({
+      upsert: (rows) => Promise.resolve(behaviour(rows)),
+    }),
+  };
+}
+
+const op = (over = {}) => ({
+  studentId: 's1', questionId: 'q1', entryDate: '2026-08-01',
+  value: true, clientUpdatedAt: '2026-08-01T10:00:00.000Z', deviceId: 'dev', ...over,
+});
+
+beforeEach(async () => { await clearMirror(); });
+
+describe('flush', () => {
+  it('pushes every queued op and empties the outbox on success', async () => {
+    await enqueue(op({ questionId: 'q1' }));
+    await enqueue(op({ questionId: 'q2' }));
+
+    const result = await flush(fakeClient(() => ({ error: null })));
+
+    expect(result.pushed).toBe(2);
+    expect(result.rejected).toEqual([]);
+    expect(await pendingCount()).toBe(0);
+  });
+
+  it('clears the dirty flag on synced rows', async () => {
+    await enqueue(op());
+    await flush(fakeClient(() => ({ error: null })));
+    const row = await db.answers.get(['s1', 'q1', '2026-08-01']);
+    expect(row.dirty).toBe(false);
+  });
+
+  it('keeps an op queued when the push fails with a network error', async () => {
+    await enqueue(op());
+    const result = await flush(fakeClient(() => ({ error: { message: 'Failed to fetch' } })));
+
+    expect(result.pushed).toBe(0);
+    expect(await pendingCount()).toBe(1);
+  });
+
+  it('drops an op the server rejects on business rules and reports it', async () => {
+    await enqueue(op());
+    const result = await flush(
+      fakeClient(() => ({ error: { code: 'P0001', message: 'انتهت مهلة التعديل على هذا اليوم' } })),
+    );
+
+    expect(result.pushed).toBe(0);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0].error).toMatch(/انتهت مهلة/);
+    expect(await pendingCount()).toBe(0);
+  });
+
+  it('is a no-op with an empty outbox', async () => {
+    const upsert = vi.fn();
+    const result = await flush({ from: () => ({ upsert }) });
+    expect(result).toEqual({ pushed: 0, rejected: [] });
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('never runs two flushes concurrently', async () => {
+    await enqueue(op());
+    let inflight = 0;
+    let overlapped = false;
+    const client = fakeClient(() => {
+      inflight += 1;
+      if (inflight > 1) overlapped = true;
+      inflight -= 1;
+      return { error: null };
+    });
+
+    await Promise.all([flush(client), flush(client)]);
+    expect(overlapped).toBe(false);
+  });
+});
+```
+
+- [ ] **Step 4: Run it to verify it fails, then implement sync**
+
+```bash
+npm test -- tests/offline/sync.test.js
+```
+
+Expected: FAIL — module not found.
+
+Create `lib/offline/sync.js`:
+
+```js
+import { db } from './db';
+import { pending, remove } from './outbox';
+
+let flushing = null;
+
+/** Postgres raises business-rule violations as P0001; those will never succeed on retry. */
+const isPermanent = (error) =>
+  error?.code === 'P0001' || error?.code === '23514' || error?.code === '42501';
+
+export async function flush(client) {
+  if (flushing) return flushing;
+
+  flushing = (async () => {
+    const ops = await pending();
+    if (ops.length === 0) return { pushed: 0, rejected: [] };
+
+    let pushed = 0;
+    const rejected = [];
+
+    for (const op of ops) {
+      const { error } = await client.from('answers').upsert(
+        {
+          student_id: op.studentId,
+          question_id: op.questionId,
+          entry_date: op.entryDate,
+          value: op.value,
+          client_updated_at: op.clientUpdatedAt,
+          device_id: op.deviceId,
+        },
+        { onConflict: 'student_id,question_id,entry_date' },
+      );
+
+      if (!error) {
+        await remove(op.seq);
+        await db.answers.update([op.studentId, op.questionId, op.entryDate], { dirty: false });
+        pushed += 1;
+      } else if (isPermanent(error)) {
+        await remove(op.seq);
+        rejected.push({ op, error: error.message });
+      } else {
+        break; // transient: stop here and keep the queue ordered for the next attempt
+      }
+    }
+
+    return { pushed, rejected };
+  })();
+
+  try {
+    return await flushing;
+  } finally {
+    flushing = null;
+  }
+}
+
+export async function mirror(client, { studentId, scheduleId, days }) {
+  const [{ data: questions }, { data: answers }] = await Promise.all([
+    client.from('questions').select('*').eq('schedule_id', scheduleId),
+    client.from('answers').select('*').eq('student_id', studentId).gte('entry_date', days.from),
+  ]);
+
+  await db.transaction('rw', db.questions, db.answers, async () => {
+    if (questions) await db.questions.bulkPut(questions);
+    if (answers) {
+      // Never clobber a row that still has an unsynced local edit.
+      for (const row of answers) {
+        const local = await db.answers.get([row.student_id, row.question_id, row.entry_date]);
+        if (local?.dirty) continue;
+        await db.answers.put({ ...row, dirty: false });
+      }
+    }
+  });
+}
+
+export function startAutoSync(client) {
+  const run = () => { if (navigator.onLine) flush(client).catch(() => {}); };
+
+  window.addEventListener('online', run);
+  document.addEventListener('visibilitychange', run);
+  const timer = setInterval(run, 60_000);
+  run();
+
+  return () => {
+    window.removeEventListener('online', run);
+    document.removeEventListener('visibilitychange', run);
+    clearInterval(timer);
+  };
+}
+```
+
+Stopping the loop on a transient error rather than continuing keeps the queue in order, so a
+later edit to the same field can never land before an earlier one.
+
+- [ ] **Step 5: Build the online hook and banner**
+
+`lib/offline/useOnline.js` exports `useOnline()` returning `navigator.onLine`, kept current by `online`/`offline` listeners, defaulting to `true` during SSR.
+
+`components/offline/OfflineBanner.js` renders nothing when online with an empty queue; an amber bar reading `تعمل الآن بدون إنترنت — التغييرات محفوظة وسترفع تلقائياً` when offline; and a navy bar reading `جارٍ المزامنة… (N)` when online with `pendingCount() > 0`.
+
+- [ ] **Step 6: Replace the clearMirror stub and run the suite**
+
+```bash
+npm test -- tests/offline
+```
+
+Expected: PASS, 13 tests.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add lib/offline components/offline tests/offline vitest.setup.js package.json package-lock.json
+git commit -m "feat(offline): IndexedDB mirror, deduplicating outbox, and sync engine"
+```
+
+---
+
+### Task 17: Daily sheet
+
+**Files:**
+- Create: `app/(student)/today/page.js`, `app/(student)/today/DailySheet.js`, `app/(student)/today/DateStrip.js`, `app/(student)/today/DayHeader.js`
+- Create: `components/ui/ProgressRing.js`
+- Create: `lib/student/useDay.js`
+- Test: `tests/student/use-day.test.js`
+
+**Interfaces:**
+- Consumes: Task 15 renderers, Task 16 offline store, Tasks 3–5 domain logic.
+- Produces: `useDay({ studentId, schedule, dayKey })` returning
+  `{ questions, values, setValue, completion, streak, loading, editable, pendingCount }`.
+  `setValue` writes optimistically to Dexie via `enqueue` and triggers a flush when online — the UI never awaits the network.
+
+- [ ] **Step 1: Write the failing hook test**
+
+Create `tests/student/use-day.test.js` using `renderHook` from `@testing-library/react` with the offline modules mocked. Cover:
+
+1. Returns `loading: true` on first render, then the day's active questions sorted by `sort_order`.
+2. Filters out questions inactive on that date (weekday and date-range rules).
+3. `setValue` updates `values` synchronously, before any promise resolves — the optimistic path.
+4. `completion` recomputes from the new value without a refetch.
+5. `editable` is `false` when the day falls outside the backfill window, and `setValue` is then a no-op.
+6. `editable` is `false` when `schedule.status === 'archived'`.
+7. A server rejection surfaced by `flush` rolls the value back to its previous state and reports the message.
+
+The rollback assertion:
+
+```js
+it('rolls a value back when the server rejects it', async () => {
+  flushMock.mockResolvedValue({ pushed: 0, rejected: [{ op: { questionId: 'q1' }, error: 'انتهت مهلة التعديل على هذا اليوم' }] });
+  const { result } = renderHook(() => useDay(args));
+  await act(() => result.current.setValue('q1', true));
+  await waitFor(() => expect(result.current.values.q1).toBeUndefined());
+  expect(result.current.error).toMatch(/انتهت مهلة/);
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails, then implement the hook**
+
+Implementation contract:
+- Reads questions and answers from Dexie first (instant, works offline), then calls `mirror()` in the background and re-reads.
+- `setValue(questionId, value)` sets local React state immediately, calls `enqueue(...)` with `clientUpdatedAt: new Date().toISOString()` and a `deviceId` persisted in `db.meta`, then calls `flush()` when `navigator.onLine`.
+- Rejections from `flush` restore the previous value and set `error`.
+- `completion` comes from `completionPct(activeQuestions, values)`; `streak` from `currentStreak(...)` over the mirrored answers.
+- `editable` is `isWithinBackfill(schedule, dayKey) && schedule.status === 'active'`.
+
+- [ ] **Step 3: Build the screen**
+
+`DateStrip.js` — a horizontally scrolling row of the last 14 days plus today, right-to-left, each chip showing the weekday abbreviation and day number, tinted by that day's completion, with days outside the backfill window rendered muted and non-interactive. `«` / `»` buttons step one day.
+
+`DayHeader.js` — `<ProgressRing value={completion} />`, the streak flame with `streak` days, and the day's earned/possible points.
+
+`DailySheet.js` — groups active questions by `section`, renders a `<QuestionCard>` per question, and shows `<SkeletonList rows={8} />` while `loading`. Each card's `onChange` calls `setValue`.
+
+`ProgressRing.js` — an SVG ring with `role="img"` and `aria-label={`نسبة الإنجاز ${value}٪`}`, animating `stroke-dashoffset`.
+
+- [ ] **Step 4: Run the suite and verify in the browser**
+
+```bash
+npm test && npm run build
+```
+
+Then run the dev server and confirm by hand: tick several items, open DevTools → Application → IndexedDB and see the rows; switch to offline in the Network panel, tick more, reload the page and confirm the ticks survive; go back online and watch the outbox drain.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/\(student\)/today components/ui/ProgressRing.js lib/student tests/student
+git commit -m "feat(student): offline-first daily sheet with optimistic ticks"
+```
+
+---
+
+### Task 18: Student leaderboard and settings
+
+**Files:**
+- Create: `app/(student)/board/page.js`, `app/(student)/board/StudentBoard.js`
+- Create: `app/(student)/settings/page.js`
+- Create: `lib/boards/queries.js`
+- Create: `supabase/migrations/0006_views.sql`
+- Test: `tests/db/views.test.js`
+
+**Interfaces:**
+- Produces (SQL views, used by every leaderboard from here on):
+  - `v_student_totals` — `student_id, schedule_id, group_id, full_name, group_name, schedule_name, answer_points, grant_points, total_points`
+  - `v_group_totals` — `group_id, schedule_id, group_name, member_count, total_points, avg_points`
+  - `v_question_totals` — `student_id, question_id, schedule_id, times_completed, points`
+- Produces (`lib/boards/queries.js`): `fetchStudentTotals(client, { scheduleId, groupId, from, to })`, `fetchGroupTotals(client, { scheduleId })`, `fetchQuestionLeaders(client, { scheduleId, questionId, limit })`.
+
+- [ ] **Step 1: Write the views migration**
+
+Create `supabase/migrations/0006_views.sql`:
+
+```sql
+create or replace view v_student_totals
+with (security_invoker = on) as
+select
+  s.id                       as student_id,
+  s.schedule_id,
+  s.group_id,
+  s.full_name,
+  g.name                     as group_name,
+  sc.name                    as schedule_name,
+  coalesce(a.points, 0)      as answer_points,
+  coalesce(p.points, 0)      as grant_points,
+  coalesce(a.points, 0) + coalesce(p.points, 0) as total_points
+from students s
+join schedules sc on sc.id = s.schedule_id
+left join groups g on g.id = s.group_id
+left join lateral (
+  select sum(points) as points from answers where student_id = s.id
+) a on true
+left join lateral (
+  select sum(points) as points from point_events where student_id = s.id
+) p on true
+where s.is_active;
+
+create or replace view v_group_totals
+with (security_invoker = on) as
+select
+  g.id            as group_id,
+  g.schedule_id,
+  g.name          as group_name,
+  count(vs.student_id)                              as member_count,
+  coalesce(sum(vs.total_points), 0)                 as member_points,
+  coalesce(gp.points, 0)                            as group_points,
+  coalesce(sum(vs.total_points), 0) + coalesce(gp.points, 0) as total_points,
+  case when count(vs.student_id) = 0 then 0
+       else round((coalesce(sum(vs.total_points), 0)) / count(vs.student_id), 1)
+  end as avg_points
+from groups g
+left join v_student_totals vs on vs.group_id = g.id
+left join lateral (
+  select sum(points) as points from point_events where group_id = g.id
+) gp on true
+group by g.id, g.schedule_id, g.name, gp.points;
+
+create or replace view v_question_totals
+with (security_invoker = on) as
+select
+  a.student_id,
+  a.question_id,
+  q.schedule_id,
+  count(*) filter (where a.points > 0) as times_completed,
+  sum(a.points)                        as points
+from answers a
+join questions q on q.id = a.question_id
+group by a.student_id, a.question_id, q.schedule_id;
+```
+
+`security_invoker = on` is essential: without it a view runs as its owner and silently
+bypasses every RLS policy written in Task 8.
+
+- [ ] **Step 2: Write the env-gated view test**
+
+Create `tests/db/views.test.js` asserting, against a seeded throwaway schedule:
+
+1. `v_student_totals.total_points` equals the sum of that student's answer points plus their personal grants.
+2. A group grant with `applied_to_members = false` moves `v_group_totals.total_points` but leaves every member's `v_student_totals.total_points` unchanged.
+3. A group grant with `applied_to_members = true` (which the application records as child per-student events) raises both.
+4. `v_question_totals.times_completed` counts only days scoring above zero, so a `single_choice` answer worth `-2` does not count as completed.
+5. **The views respect RLS:** signed in as a student from schedule B, selecting `v_student_totals` returns only schedule B rows.
+
+Point 5 is the one that catches a missing `security_invoker`.
+
+- [ ] **Step 3: Apply the migration, run the test, then build the screens**
+
+```bash
+npm test -- tests/db/views.test.js
+```
+
+Expected: PASS, 5 tests.
+
+`StudentBoard.js` fetches `v_student_totals` for the student's own schedule, ranked, with the current student's row highlighted and pinned to the bottom edge if it falls outside the visible window. Each row shows **rank · name · group · points**. It renders `<SkeletonList rows={10} />` while loading and a plain notice when `students_see_leaderboard` is false — the RLS policy already prevents the data from arriving, so the UI only has to explain the absence.
+
+`app/(student)/settings/page.js` shows the student's name, group, schedule, a **تغيير الرمز** link to `/change-password`, a theme toggle, the pending-sync count, and **تسجيل الخروج** calling `signOut()`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add supabase/migrations/0006_views.sql lib/boards app/\(student\)/board app/\(student\)/settings tests/db/views.test.js
+git commit -m "feat(student): leaderboard views, student board, and settings"
+```
+
+---
