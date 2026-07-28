@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Select } from '@/components/ui/Field';
 import { SkeletonList } from '@/components/ui/Skeleton';
+import { Modal, ModalActions } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
 import { useSchedule } from '@/lib/manage/useSchedule';
@@ -90,43 +91,49 @@ export function StudentsScreen() {
         title={`الطلاب — ${current.name}`}
         action={
           <div className="flex gap-2">
-            <Button onClick={() => setMode(mode === 'add' ? null : 'add')}>إضافة طالب</Button>
-            <Button tone="outline" onClick={() => setMode(mode === 'import' ? null : 'import')}>
+            <Button onClick={() => setMode('add')}>إضافة طالب</Button>
+            <Button tone="outline" onClick={() => setMode('import')}>
               استيراد Excel
             </Button>
           </div>
         }
       >
-        {mode === 'add' && (
-          <AddStudentForm
-            groups={groups}
-            onCancel={() => setMode(null)}
-            onSubmit={async (payload) => {
-              try {
-                const result = await createStudents({ scheduleId: current.id, ...payload });
-                setPinSheet(result.created);
-                setMode(null);
-                await load();
-                toast.push('تمت إضافة الطالب', 'success');
-              } catch (err) {
-                setError(err.message);
-              }
-            }}
-          />
-        )}
-
-        {mode === 'import' && (
-          <ImportWizard
-            groups={groups}
-            onCancel={() => setMode(null)}
-            onImport={async (payload) => {
+        <AddStudentForm
+          open={mode === 'add'}
+          groups={groups}
+          onCancel={() => setMode(null)}
+          onSubmit={async (payload) => {
+            try {
               const result = await createStudents({ scheduleId: current.id, ...payload });
-              setPinSheet((prev) => [...prev, ...result.created]);
+              setPinSheet(result.created);
+              setMode(null);
               await load();
-              return result;
-            }}
-          />
-        )}
+              toast.push('تمت إضافة الطالب', 'success');
+            } catch (err) {
+              setError(err.message);
+            }
+          }}
+        />
+
+        <Modal
+          open={mode === 'import'}
+          onClose={() => setMode(null)}
+          title="استيراد الطلاب من Excel"
+          size="lg"
+        >
+          {mode === 'import' && (
+            <ImportWizard
+              groups={groups}
+              onCancel={() => setMode(null)}
+              onImport={async (payload) => {
+                const result = await createStudents({ scheduleId: current.id, ...payload });
+                setPinSheet((prev) => [...prev, ...result.created]);
+                await load();
+                return result;
+              }}
+            />
+          )}
+        </Modal>
 
         <div className="mt-3 flex flex-wrap gap-2">
           <Input
@@ -276,46 +283,61 @@ export function StudentsScreen() {
   );
 }
 
-function AddStudentForm({ groups, onSubmit, onCancel }) {
+function AddStudentForm({ open, groups, onSubmit, onCancel }) {
   const [name, setName] = useState('');
-  const [groupId, setGroupId] = useState(groups[0]?.id ?? '');
+  const [groupId, setGroupId] = useState('');
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (open) {
+      setName('');
+      setGroupId(groups[0]?.id ?? '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   return (
-    <form
-      className="grid gap-3 rounded-xl border border-line p-3 sm:grid-cols-3"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (!name.trim()) return;
-        setBusy(true);
-        await onSubmit({ groupId: groupId || null, students: [{ full_name: name.trim() }] });
-        setName('');
-        setBusy(false);
-      }}
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title="إضافة طالب"
+      description="يُنشأ رمز دخول مؤقت للطالب بعد الحفظ."
+      size="sm"
     >
-      <Field label="اسم الطالب" htmlFor="stname">
-        <Input id="stname" value={name} onChange={(e) => setName(e.target.value)} required />
-      </Field>
+      <form
+        className="grid gap-3"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!name.trim()) return;
+          setBusy(true);
+          await onSubmit({ groupId: groupId || null, students: [{ full_name: name.trim() }] });
+          setBusy(false);
+        }}
+      >
+        <Field label="اسم الطالب" htmlFor="stname">
+          <Input id="stname" value={name} onChange={(e) => setName(e.target.value)} required />
+        </Field>
 
-      <Field label="المجموعة" htmlFor="stgroup">
-        <Select id="stgroup" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-          <option value="">بدون مجموعة</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </Select>
-      </Field>
+        <Field label="المجموعة" htmlFor="stgroup">
+          <Select id="stgroup" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+            <option value="">بدون مجموعة</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
 
-      <div className="flex items-end gap-2">
-        <Button type="submit" loading={busy}>
-          إضافة
-        </Button>
-        <Button tone="ghost" onClick={onCancel}>
-          إلغاء
-        </Button>
-      </div>
-    </form>
+        <ModalActions>
+          <Button type="submit" loading={busy}>
+            إضافة
+          </Button>
+          <Button tone="ghost" onClick={onCancel}>
+            إلغاء
+          </Button>
+        </ModalActions>
+      </form>
+    </Modal>
   );
 }

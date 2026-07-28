@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Select } from '@/components/ui/Field';
 import { SkeletonList } from '@/components/ui/Skeleton';
+import { Modal, ModalActions } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
 import { useSchedule } from '@/lib/manage/useSchedule';
@@ -308,44 +309,70 @@ function GrantForm({
 }
 
 function CriteriaPanel({ scheduleId, criteria, onChanged, onError }) {
+  const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [allowNegative, setAllowNegative] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (creating) {
+      setName('');
+      setAllowNegative(true);
+    }
+  }, [creating]);
 
   return (
-    <Panel title="بنود التقييم">
-      <form
-        className="flex flex-wrap items-end gap-2"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const trimmed = name.trim();
-          if (!trimmed) return;
-          setName('');
-          try {
-            await createCriterion(scheduleId, trimmed, allowNegative, criteria.length);
-            onChanged();
-          } catch (err) {
-            onError(err.message);
-          }
-        }}
+    <Panel
+      title="بنود التقييم"
+      action={<Button onClick={() => setCreating(true)}>بند تقييم جديد</Button>}
+    >
+      <Modal
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="بند تقييم جديد"
+        size="sm"
       >
-        <Input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="اسم البند، مثل: التعاون"
-          aria-label="اسم بند التقييم"
-          className="max-w-xs"
-        />
-        <label className="flex items-center gap-2 pb-2 text-sm font-semibold">
-          <input
-            type="checkbox"
-            checked={allowNegative}
-            onChange={(e) => setAllowNegative(e.target.checked)}
-            className="size-5 accent-[color:var(--color-accent)]"
-          />
-          يسمح بالخصم
-        </label>
-        <Button type="submit">إضافة</Button>
-      </form>
+        <form
+          className="grid gap-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const trimmed = name.trim();
+            if (!trimmed) return;
+            setBusy(true);
+            try {
+              await createCriterion(scheduleId, trimmed, allowNegative, criteria.length);
+              onChanged();
+              setCreating(false);
+            } catch (err) {
+              onError(err.message);
+            }
+            setBusy(false);
+          }}
+        >
+          <Field label="اسم البند" htmlFor="cname" hint="مثل: التعاون">
+            <Input id="cname" value={name} onChange={(e) => setName(e.target.value)} required />
+          </Field>
+
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={allowNegative}
+              onChange={(e) => setAllowNegative(e.target.checked)}
+              className="accent-[color:var(--color-accent)]"
+            />
+            يسمح بالخصم
+          </label>
+
+          <ModalActions>
+            <Button type="submit" loading={busy}>
+              إضافة
+            </Button>
+            <Button tone="ghost" onClick={() => setCreating(false)}>
+              إلغاء
+            </Button>
+          </ModalActions>
+        </form>
+      </Modal>
 
       <ul className="mt-3 flex flex-wrap gap-2">
         {criteria.map((c) => (

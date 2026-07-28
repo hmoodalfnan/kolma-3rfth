@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Select } from '@/components/ui/Field';
 import { SkeletonList } from '@/components/ui/Skeleton';
+import { Modal, ModalActions } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
 import { useSchedule } from '@/lib/manage/useSchedule';
@@ -35,28 +36,25 @@ export function SchedulesScreen() {
 
       <Panel
         title="الرحلات"
-        action={
-          <Button onClick={() => setCreating((v) => !v)}>
-            {creating ? 'إلغاء' : 'رحلة جديدة'}
-          </Button>
-        }
+        action={<Button onClick={() => setCreating(true)}>رحلة جديدة</Button>}
       >
-        {creating && (
-          <ScheduleForm
-            onCancel={() => setCreating(false)}
-            onSubmit={async (values) => {
-              try {
-                const created = await createSchedule(values);
-                await reload();
-                select(created.id);
-                setCreating(false);
-                toast.push('تم إنشاء الرحلة', 'success');
-              } catch (err) {
-                setError(err.message);
-              }
-            }}
-          />
-        )}
+        <ScheduleForm
+          open={creating}
+          title="رحلة جديدة"
+          submitLabel="إنشاء الرحلة"
+          onCancel={() => setCreating(false)}
+          onSubmit={async (values) => {
+            try {
+              const created = await createSchedule(values);
+              await reload();
+              select(created.id);
+              setCreating(false);
+              toast.push('تم إنشاء الرحلة', 'success');
+            } catch (err) {
+              setError(err.message);
+            }
+          }}
+        />
 
         {schedules.length === 0 ? (
           <EmptyState>لا توجد رحلات بعد — أنشئ أول رحلة.</EmptyState>
@@ -99,71 +97,89 @@ export function SchedulesScreen() {
   );
 }
 
-function ScheduleForm({ initial, onSubmit, onCancel }) {
-  const [name, setName] = useState(initial?.name ?? '');
-  const [start, setStart] = useState(initial?.start_date ?? todayInRiyadh());
-  const [openEnded, setOpenEnded] = useState(!initial?.end_date);
-  const [end, setEnd] = useState(initial?.end_date ?? '');
+function ScheduleForm({ open, initial, title, submitLabel = 'حفظ', onSubmit, onCancel }) {
+  const [name, setName] = useState('');
+  const [start, setStart] = useState(todayInRiyadh());
+  const [openEnded, setOpenEnded] = useState(true);
+  const [end, setEnd] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Seed from `initial` each time it opens rather than at mount: the component
+  // stays mounted between openings now that it is a modal.
+  //
+  // Depends on `open` alone on purpose. Callers pass `initial` as an object
+  // literal, so it has a fresh identity on every render — depending on it would
+  // re-seed the fields after every keystroke and wipe what was typed.
+  useEffect(() => {
+    if (!open) return;
+    setName(initial?.name ?? '');
+    setStart(initial?.start_date ?? todayInRiyadh());
+    setEnd(initial?.end_date ?? '');
+    setOpenEnded(!initial?.end_date);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   return (
-    <form
-      className="grid gap-3 rounded-xl border border-line p-3 sm:grid-cols-2"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setBusy(true);
-        await onSubmit({
-          name: name.trim(),
-          start_date: start,
-          end_date: openEnded ? null : end || null,
-        });
-        setBusy(false);
-      }}
-    >
-      <Field label="اسم الرحلة" htmlFor="sname">
-        <Input id="sname" value={name} onChange={(e) => setName(e.target.value)} required />
-      </Field>
+    <Modal open={open} onClose={onCancel} title={title} size="sm">
+      <form
+        className="grid gap-3"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          await onSubmit({
+            name: name.trim(),
+            start_date: start,
+            end_date: openEnded ? null : end || null,
+          });
+          setBusy(false);
+        }}
+      >
+        <Field label="اسم الرحلة" htmlFor="sname">
+          <Input id="sname" value={name} onChange={(e) => setName(e.target.value)} required />
+        </Field>
 
-      <Field label="تاريخ البداية" htmlFor="sstart">
-        <Input
-          id="sstart"
-          type="date"
-          value={start}
-          onChange={(e) => setStart(e.target.value)}
-          required
-        />
-      </Field>
+        <Field label="تاريخ البداية" htmlFor="sstart">
+          <Input
+            id="sstart"
+            type="date"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            required
+          />
+        </Field>
 
-      <Field label="تاريخ النهاية" htmlFor="send" hint="اتركها بدون نهاية للرحلات المستمرة">
-        <Input
-          id="send"
-          type="date"
-          value={end}
-          disabled={openEnded}
-          min={start}
-          onChange={(e) => setEnd(e.target.value)}
-        />
-      </Field>
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <input
+            type="checkbox"
+            checked={openEnded}
+            onChange={(e) => setOpenEnded(e.target.checked)}
+            className="accent-[color:var(--color-accent)]"
+          />
+          رحلة مستمرة بدون تاريخ نهاية
+        </label>
 
-      <label className="flex items-center gap-2 self-end pb-2 text-sm font-semibold">
-        <input
-          type="checkbox"
-          checked={openEnded}
-          onChange={(e) => setOpenEnded(e.target.checked)}
-          className="size-5 accent-[color:var(--color-accent)]"
-        />
-        بدون تاريخ نهاية
-      </label>
+        {!openEnded && (
+          <Field label="تاريخ النهاية" htmlFor="send">
+            <Input
+              id="send"
+              type="date"
+              value={end}
+              min={start}
+              onChange={(e) => setEnd(e.target.value)}
+            />
+          </Field>
+        )}
 
-      <div className="flex gap-2 sm:col-span-2">
-        <Button type="submit" loading={busy}>
-          حفظ
-        </Button>
-        <Button tone="ghost" onClick={onCancel}>
-          إلغاء
-        </Button>
-      </div>
-    </form>
+        <ModalActions>
+          <Button type="submit" loading={busy}>
+            {submitLabel}
+          </Button>
+          <Button tone="ghost" onClick={onCancel}>
+            إلغاء
+          </Button>
+        </ModalActions>
+      </form>
+    </Modal>
   );
 }
 
@@ -247,35 +263,34 @@ function ScheduleSettings({ schedule, onChanged }) {
           >
             {row.status === 'archived' ? 'إعادة فتح الرحلة' : 'أرشفة الرحلة'}
           </Button>
-          <Button tone="ghost" onClick={() => setCloning((v) => !v)}>
+          <Button tone="ghost" onClick={() => setCloning(true)}>
             نسخ الرحلة
           </Button>
         </div>
       </div>
 
-      {cloning && (
-        <div className="mt-3">
-          <ScheduleForm
-            initial={{ name: `${schedule.name} (نسخة)`, start_date: todayInRiyadh() }}
-            onCancel={() => setCloning(false)}
-            onSubmit={async (values) => {
-              try {
-                await post('/api/schedules/clone', {
-                  scheduleId: schedule.id,
-                  name: values.name,
-                  startDate: values.start_date,
-                  endDate: values.end_date,
-                });
-                setCloning(false);
-                onChanged();
-                toast.push('تم نسخ الرحلة مع بنودها ومجموعاتها', 'success');
-              } catch (err) {
-                setError(err.message);
-              }
-            }}
-          />
-        </div>
-      )}
+      <ScheduleForm
+        open={cloning}
+        title="نسخ الرحلة"
+        submitLabel="نسخ"
+        initial={{ name: `${schedule.name} (نسخة)`, start_date: todayInRiyadh() }}
+        onCancel={() => setCloning(false)}
+        onSubmit={async (values) => {
+          try {
+            await post('/api/schedules/clone', {
+              scheduleId: schedule.id,
+              name: values.name,
+              startDate: values.start_date,
+              endDate: values.end_date,
+            });
+            setCloning(false);
+            onChanged();
+            toast.push('تم نسخ الرحلة مع بنودها ومجموعاتها', 'success');
+          } catch (err) {
+            setError(err.message);
+          }
+        }}
+      />
 
       <div className="mt-4 border-t border-line pt-3">
         <JoinLinkRow
@@ -296,7 +311,8 @@ function ScheduleSettings({ schedule, onChanged }) {
 function GroupsPanel({ schedule }) {
   const toast = useToast();
   const [groups, setGroups] = useState(null);
-  const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -318,32 +334,45 @@ function GroupsPanel({ schedule }) {
   }
 
   return (
-    <Panel title="المجموعات (الغرف)">
+    <Panel
+      title="المجموعات (الغرف)"
+      action={<Button onClick={() => setCreating(true)}>مجموعة جديدة</Button>}
+    >
       <ErrorText>{error}</ErrorText>
 
-      <form
-        className="flex gap-2"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const trimmed = name.trim();
-          if (!trimmed) return;
-          setName('');
+      <GroupForm
+        open={creating}
+        title="مجموعة جديدة"
+        submitLabel="إضافة"
+        onCancel={() => setCreating(false)}
+        onSubmit={async (value) => {
           try {
-            const created = await createGroup(schedule.id, trimmed, groups.length);
+            const created = await createGroup(schedule.id, value, groups.length);
             setGroups((g) => [...g, created]);
+            setCreating(false);
           } catch (err) {
             setError(err.message);
           }
         }}
-      >
-        <Input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="اسم المجموعة، مثل: غرفة 101"
-          aria-label="اسم المجموعة"
-        />
-        <Button type="submit">إضافة</Button>
-      </form>
+      />
+
+      <GroupForm
+        open={Boolean(editing)}
+        title="تعديل اسم المجموعة"
+        initialName={editing?.name}
+        onCancel={() => setEditing(null)}
+        onSubmit={async (value) => {
+          try {
+            await updateGroup(editing.id, { name: value });
+            setGroups((rows) =>
+              rows.map((r) => (r.id === editing.id ? { ...r, name: value } : r)),
+            );
+            setEditing(null);
+          } catch (err) {
+            setError(err.message);
+          }
+        }}
+      />
 
       {groups.length === 0 ? (
         <EmptyState>لا توجد مجموعات بعد.</EmptyState>
@@ -352,22 +381,10 @@ function GroupsPanel({ schedule }) {
           {groups.map((g) => (
             <li key={g.id} className="rounded-xl border border-line p-3">
               <div className="flex items-center gap-2">
-                <Input
-                  defaultValue={g.name}
-                  aria-label={`اسم المجموعة ${g.name}`}
-                  onBlur={async (e) => {
-                    const value = e.target.value.trim();
-                    if (!value || value === g.name) return;
-                    try {
-                      await updateGroup(g.id, { name: value });
-                      setGroups((rows) =>
-                        rows.map((r) => (r.id === g.id ? { ...r, name: value } : r)),
-                      );
-                    } catch (err) {
-                      setError(err.message);
-                    }
-                  }}
-                />
+                <p className="min-w-0 flex-1 truncate font-semibold">{g.name}</p>
+                <Button tone="outline" onClick={() => setEditing(g)}>
+                  تعديل
+                </Button>
                 <Button
                   tone="danger"
                   onClick={async () => {
@@ -399,5 +416,44 @@ function GroupsPanel({ schedule }) {
         </ul>
       )}
     </Panel>
+  );
+}
+
+function GroupForm({ open, title, initialName, submitLabel = 'حفظ', onSubmit, onCancel }) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (open) setName(initialName ?? '');
+  }, [open]);
+
+  return (
+    <Modal open={open} onClose={onCancel} title={title} size="sm">
+      <form
+        className="grid gap-3"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const trimmed = name.trim();
+          if (!trimmed) return;
+          setBusy(true);
+          await onSubmit(trimmed);
+          setBusy(false);
+        }}
+      >
+        <Field label="اسم المجموعة" htmlFor="gname" hint="مثل: غرفة 101">
+          <Input id="gname" value={name} onChange={(e) => setName(e.target.value)} required />
+        </Field>
+
+        <ModalActions>
+          <Button type="submit" loading={busy}>
+            {submitLabel}
+          </Button>
+          <Button tone="ghost" onClick={onCancel}>
+            إلغاء
+          </Button>
+        </ModalActions>
+      </form>
+    </Modal>
   );
 }

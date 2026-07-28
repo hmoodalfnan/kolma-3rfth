@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { SkeletonList } from '@/components/ui/Skeleton';
+import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
 import { QuestionEditor } from '@/components/questions/editors/QuestionEditor';
@@ -50,35 +51,55 @@ export function LibraryScreen() {
 
       <Panel
         title="مكتبة البنود الرئيسية"
-        action={
-          <Button onClick={() => setEditing(editing === 'new' ? null : 'new')}>بند جديد</Button>
-        }
+        action={<Button onClick={() => setEditing('new')}>بند جديد</Button>}
       >
         <p className="mb-3 text-sm text-muted">
           هذه المكتبة مرجع للمشرفين ينسخون منها. تعديل بند هنا لا يغيّر النسخ الموجودة داخل
           الرحلات الجارية.
         </p>
 
-        {editing === 'new' && (
-          <QuestionEditor
-            onCancel={() => setEditing(null)}
-            onSave={async (draft) => {
-              const { error: insertError } = await client.from('question_library').insert({
-                section: draft.section,
-                title: draft.title,
-                help_text: draft.help_text,
-                type: draft.type,
-                config: draft.config,
-                points: draft.points,
-                sort_order: rows.length,
-              });
-              if (insertError) throw new Error(insertError.message);
-              setEditing(null);
-              await load();
-              toast.push('تمت إضافة البند للمكتبة', 'success');
-            }}
-          />
-        )}
+        <Modal
+          open={editing !== null}
+          onClose={() => setEditing(null)}
+          title={editing === 'new' ? 'بند جديد في المكتبة' : 'تعديل بند المكتبة'}
+          description="النسخ الموجودة داخل الرحلات لا تتأثر بهذا التعديل."
+          size="lg"
+        >
+          {editing !== null && (
+            <QuestionEditor
+              key={editing === 'new' ? 'new' : editing.id}
+              question={editing === 'new' ? undefined : editing}
+              onCancel={() => setEditing(null)}
+              onSave={async (draft) => {
+                const payload = {
+                  section: draft.section,
+                  title: draft.title,
+                  help_text: draft.help_text,
+                  type: draft.type,
+                  config: draft.config,
+                  points: draft.points,
+                };
+
+                const { error: writeError } =
+                  editing === 'new'
+                    ? await client
+                        .from('question_library')
+                        .insert({ ...payload, sort_order: rows.length })
+                    : await client.from('question_library').update(payload).eq('id', editing.id);
+                if (writeError) throw new Error(writeError.message);
+
+                setEditing(null);
+                await load();
+                toast.push(
+                  editing === 'new'
+                    ? 'تمت إضافة البند للمكتبة'
+                    : 'تم الحفظ — النسخ داخل الرحلات لم تتأثر',
+                  'success',
+                );
+              }}
+            />
+          )}
+        </Modal>
 
         {rows === null ? (
           <SkeletonList rows={10} />
@@ -88,29 +109,7 @@ export function LibraryScreen() {
           <ul className="mt-3 space-y-2">
             {rows.map((q) => (
               <li key={q.id} className="rounded-xl border border-line p-3">
-                {editing === q.id ? (
-                  <QuestionEditor
-                    question={q}
-                    onCancel={() => setEditing(null)}
-                    onSave={async (draft) => {
-                      const { error: updateError } = await client
-                        .from('question_library')
-                        .update({
-                          section: draft.section,
-                          title: draft.title,
-                          help_text: draft.help_text,
-                          type: draft.type,
-                          config: draft.config,
-                          points: draft.points,
-                        })
-                        .eq('id', q.id);
-                      if (updateError) throw new Error(updateError.message);
-                      setEditing(null);
-                      await load();
-                      toast.push('تم الحفظ — النسخ داخل الرحلات لم تتأثر', 'success');
-                    }}
-                  />
-                ) : (
+                {
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold">{q.title}</p>
@@ -131,7 +130,7 @@ export function LibraryScreen() {
                     <Button
                       tone="ghost"
                       className="min-h-0 px-2 py-1 text-xs"
-                      onClick={() => setEditing(q.id)}
+                      onClick={() => setEditing(q)}
                     >
                       تعديل
                     </Button>
@@ -160,7 +159,7 @@ export function LibraryScreen() {
                       حذف
                     </Button>
                   </div>
-                )}
+                }
               </li>
             ))}
           </ul>

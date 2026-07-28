@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { SkeletonList } from '@/components/ui/Skeleton';
+import { Modal, ModalActions } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
 import { QuestionEditor } from '@/components/questions/editors/QuestionEditor';
@@ -74,41 +75,77 @@ export function QuestionsScreen() {
         title={`بنود الرحلة — ${current.name}`}
         action={
           <div className="flex gap-2">
-            <Button onClick={() => setEditing(editing === 'new' ? null : 'new')}>بند جديد</Button>
-            <Button tone="outline" onClick={() => setShowLibrary((v) => !v)}>
+            <Button onClick={() => setEditing('new')}>بند جديد</Button>
+            <Button tone="outline" onClick={() => setShowLibrary(true)}>
               نسخ من المكتبة
             </Button>
           </div>
         }
       >
-        {editing === 'new' && (
-          <QuestionEditor
-            onCancel={() => setEditing(null)}
-            onSave={async (draft) => {
-              const created = await createQuestion({
-                ...draft,
-                schedule_id: current.id,
-                sort_order: questions.length,
-              });
-              setQuestions((rows) => [...rows, created]);
-              setEditing(null);
-              toast.push('تمت إضافة البند', 'success');
-            }}
-          />
-        )}
+        <Modal
+          open={editing !== null}
+          onClose={() => setEditing(null)}
+          title={editing === 'new' ? 'بند جديد' : 'تعديل البند'}
+          size="lg"
+        >
+          {editing !== null && (
+            <QuestionEditor
+              // Remounts between the new-question form and each existing one, so
+              // the editor never opens holding the previous question's draft.
+              key={editing === 'new' ? 'new' : editing.id}
+              question={editing === 'new' ? undefined : editing}
+              onCancel={() => setEditing(null)}
+              onSave={async (draft) => {
+                if (editing === 'new') {
+                  const created = await createQuestion({
+                    ...draft,
+                    schedule_id: current.id,
+                    sort_order: questions.length,
+                  });
+                  setQuestions((rows) => [...rows, created]);
+                  setEditing(null);
+                  toast.push('تمت إضافة البند', 'success');
+                  return;
+                }
 
-        {showLibrary && (
-          <LibraryPicker
-            existing={questions ?? []}
-            onCancel={() => setShowLibrary(false)}
-            onCopy={async (rows) => {
-              const created = await copyFromLibrary(current.id, rows, questions.length);
-              setQuestions((prev) => [...prev, ...created]);
-              setShowLibrary(false);
-              toast.push(`تم نسخ ${created.length} بنداً — النسخ مستقلة عن المكتبة`, 'success');
-            }}
-          />
-        )}
+                const updated = await updateQuestion(editing.id, {
+                  section: draft.section,
+                  title: draft.title,
+                  help_text: draft.help_text,
+                  type: draft.type,
+                  config: draft.config,
+                  points: draft.points,
+                  active_weekdays: draft.active_weekdays,
+                  active_from: draft.active_from,
+                  active_to: draft.active_to,
+                });
+                setQuestions((rows) => rows.map((r) => (r.id === editing.id ? updated : r)));
+                setEditing(null);
+                toast.push('تم حفظ التعديل', 'success');
+              }}
+            />
+          )}
+        </Modal>
+
+        <Modal
+          open={showLibrary}
+          onClose={() => setShowLibrary(false)}
+          title="نسخ من مكتبة البنود"
+          description="البنود المنسوخة تصبح مستقلة تماماً — تعديل المكتبة لاحقاً لا يغيّر رحلتك."
+        >
+          {showLibrary && (
+            <LibraryPicker
+              existing={questions ?? []}
+              onCancel={() => setShowLibrary(false)}
+              onCopy={async (rows) => {
+                const created = await copyFromLibrary(current.id, rows, questions.length);
+                setQuestions((prev) => [...prev, ...created]);
+                setShowLibrary(false);
+                toast.push(`تم نسخ ${created.length} بنداً — النسخ مستقلة عن المكتبة`, 'success');
+              }}
+            />
+          )}
+        </Modal>
 
         {questions === null ? (
           <SkeletonList rows={8} />
@@ -122,30 +159,7 @@ export function QuestionsScreen() {
                 <ul className="space-y-2">
                   {items.map((q) => (
                     <li key={q.id} className="rounded-xl border border-line p-3">
-                      {editing === q.id ? (
-                        <QuestionEditor
-                          question={q}
-                          onCancel={() => setEditing(null)}
-                          onSave={async (draft) => {
-                            const updated = await updateQuestion(q.id, {
-                              section: draft.section,
-                              title: draft.title,
-                              help_text: draft.help_text,
-                              type: draft.type,
-                              config: draft.config,
-                              points: draft.points,
-                              active_weekdays: draft.active_weekdays,
-                              active_from: draft.active_from,
-                              active_to: draft.active_to,
-                            });
-                            setQuestions((rows) =>
-                              rows.map((r) => (r.id === q.id ? updated : r)),
-                            );
-                            setEditing(null);
-                            toast.push('تم حفظ التعديل', 'success');
-                          }}
-                        />
-                      ) : (
+                      {
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-semibold">{q.title}</p>
@@ -189,7 +203,7 @@ export function QuestionsScreen() {
                             <Button
                               tone="ghost"
                               className="min-h-0 px-2 py-1 text-xs"
-                              onClick={() => setEditing(q.id)}
+                              onClick={() => setEditing(q)}
                             >
                               تعديل
                             </Button>
@@ -217,7 +231,7 @@ export function QuestionsScreen() {
                             </Button>
                           </div>
                         </div>
-                      )}
+                      }
                     </li>
                   ))}
                 </ul>
@@ -249,13 +263,10 @@ function LibraryPicker({ existing, onCopy, onCancel }) {
   if (library === null) return <SkeletonList rows={6} />;
 
   return (
-    <div className="space-y-3 rounded-xl border border-line p-3">
+    <div className="space-y-3">
       <ErrorText>{error}</ErrorText>
-      <p className="text-sm text-muted">
-        البنود المنسوخة تصبح مستقلة تماماً — تعديل المكتبة لاحقاً لا يغيّر رحلتك.
-      </p>
 
-      <ul className="max-h-80 space-y-1.5 overflow-y-auto">
+      <ul className="space-y-1.5">
         {library.map((q) => {
           const already = copied.has(q.id);
           return (
@@ -293,7 +304,7 @@ function LibraryPicker({ existing, onCopy, onCancel }) {
         })}
       </ul>
 
-      <div className="flex gap-2">
+      <ModalActions>
         <Button
           disabled={selected.size === 0}
           onClick={() => onCopy(library.filter((q) => selected.has(q.id)))}
@@ -303,7 +314,7 @@ function LibraryPicker({ existing, onCopy, onCancel }) {
         <Button tone="ghost" onClick={onCancel}>
           إلغاء
         </Button>
-      </div>
+      </ModalActions>
     </div>
   );
 }
