@@ -39,8 +39,14 @@ export async function GET() {
   // never by the app. Say so plainly rather than reporting a bare "missing".
   const hasTestVars = Object.keys(process.env).some((k) => k.startsWith('SUPABASE_TEST_'));
   if (hasTestVars && missing.length > 0) {
+    const needed = [
+      acceptedNames.url[0],
+      acceptedNames.publicKey[0],
+      acceptedNames.secretKey[0],
+    ].join(', ');
+
     warnings.push(
-      'SUPABASE_TEST_* variables are set, but those are only read by the database test suite. The app needs NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY.',
+      `SUPABASE_TEST_* variables are set, but those are only read by the database test suite. The app needs: ${needed}.`,
     );
   }
 
