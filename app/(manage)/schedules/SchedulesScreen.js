@@ -40,6 +40,7 @@ export function SchedulesScreen() {
       >
         <ScheduleForm
           open={creating}
+          error={error}
           title="رحلة جديدة"
           submitLabel="إنشاء الرحلة"
           onCancel={() => setCreating(false)}
@@ -97,7 +98,7 @@ export function SchedulesScreen() {
   );
 }
 
-function ScheduleForm({ open, initial, title, submitLabel = 'حفظ', onSubmit, onCancel }) {
+function ScheduleForm({ open, initial, title, submitLabel = 'حفظ', error, onSubmit, onCancel }) {
   const [name, setName] = useState('');
   const [start, setStart] = useState(todayInRiyadh());
   const [openEnded, setOpenEnded] = useState(true);
@@ -120,7 +121,7 @@ function ScheduleForm({ open, initial, title, submitLabel = 'حفظ', onSubmit, 
   }, [open]);
 
   return (
-    <Modal open={open} onClose={onCancel} title={title} size="sm">
+    <Modal open={open} onClose={onCancel} title={title} error={error} size="sm">
       <form
         className="grid gap-3"
         onSubmit={async (e) => {
@@ -271,6 +272,7 @@ function ScheduleSettings({ schedule, onChanged }) {
 
       <ScheduleForm
         open={cloning}
+        error={error}
         title="نسخ الرحلة"
         submitLabel="نسخ"
         initial={{ name: `${schedule.name} (نسخة)`, start_date: todayInRiyadh() }}
@@ -342,6 +344,7 @@ function GroupsPanel({ schedule }) {
 
       <GroupForm
         open={creating}
+        error={error}
         title="مجموعة جديدة"
         submitLabel="إضافة"
         onCancel={() => setCreating(false)}
@@ -358,6 +361,7 @@ function GroupsPanel({ schedule }) {
 
       <GroupForm
         open={Boolean(editing)}
+        error={error}
         title="تعديل اسم المجموعة"
         initialName={editing?.name}
         onCancel={() => setEditing(null)}
@@ -419,7 +423,7 @@ function GroupsPanel({ schedule }) {
   );
 }
 
-function GroupForm({ open, title, initialName, submitLabel = 'حفظ', onSubmit, onCancel }) {
+function GroupForm({ open, title, initialName, submitLabel = 'حفظ', error, onSubmit, onCancel }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -429,7 +433,7 @@ function GroupForm({ open, title, initialName, submitLabel = 'حفظ', onSubmit,
   }, [open]);
 
   return (
-    <Modal open={open} onClose={onCancel} title={title} size="sm">
+    <Modal open={open} onClose={onCancel} title={title} error={error} size="sm">
       <form
         className="grid gap-3"
         onSubmit={async (e) => {

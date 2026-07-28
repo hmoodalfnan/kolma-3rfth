@@ -20,6 +20,7 @@ export function StaffScreen() {
   const [creating, setCreating] = useState(false);
   const [credentials, setCredentials] = useState(null);
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
 
   const load = useCallback(async () => {
     setStaff(null);
@@ -74,12 +75,23 @@ export function StaffScreen() {
 
       <Panel
         title="حسابات المشرفين"
-        action={<Button onClick={() => setCreating(true)}>حساب جديد</Button>}
+        action={
+          <Button
+            onClick={() => {
+              setFormError('');
+              setCreating(true);
+            }}
+          >
+            حساب جديد
+          </Button>
+        }
       >
         <StaffForm
           open={creating}
+          error={formError}
           onCancel={() => setCreating(false)}
           onSubmit={async (values) => {
+            setFormError('');
             try {
               const result = await post('/api/staff', { action: 'create', ...values });
               setCreating(false);
@@ -91,7 +103,9 @@ export function StaffScreen() {
                 password: result.password,
               });
             } catch (err) {
-              setError(err.message);
+              // Belongs inside the dialog: the page-level banner sits behind the
+              // backdrop, so a failure here looked like nothing happened at all.
+              setFormError(err.message);
             }
           }}
         />
@@ -224,7 +238,7 @@ export function StaffScreen() {
   );
 }
 
-function StaffForm({ open, onSubmit, onCancel }) {
+function StaffForm({ open, error, onSubmit, onCancel }) {
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [role, setRole] = useState('manager');
@@ -257,6 +271,8 @@ function StaffForm({ open, onSubmit, onCancel }) {
           setBusy(false);
         }}
       >
+        <ErrorText>{error}</ErrorText>
+
         <Field label="اسم المستخدم" htmlFor="uname" hint="أحرف إنجليزية وأرقام وشرطة سفلية فقط">
           <Input
             id="uname"

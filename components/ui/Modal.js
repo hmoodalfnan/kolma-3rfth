@@ -17,7 +17,7 @@ const SIZES = {
  * this one can. On phones it fills the screen, because a centred card with a
  * software keyboard open leaves almost nothing visible.
  */
-export function Modal({ open, onClose, title, description, size = 'md', children }) {
+export function Modal({ open, onClose, title, description, error, size = 'md', children }) {
   const ref = useRef(null);
   const headingId = useId();
   const descriptionId = useId();
@@ -93,7 +93,19 @@ export function Modal({ open, onClose, title, description, size = 'md', children
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          {/* A dialog covers the page, so a failure reported by the banner
+              underneath it reads as nothing having happened at all. */}
+          {error && (
+            <p
+              role="alert"
+              className="mb-3 rounded-xl bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink"
+            >
+              {error}
+            </p>
+          )}
+          {children}
+        </div>
       </div>
     </dialog>
   );

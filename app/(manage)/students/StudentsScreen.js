@@ -100,6 +100,7 @@ export function StudentsScreen() {
       >
         <AddStudentForm
           open={mode === 'add'}
+          error={error}
           groups={groups}
           onCancel={() => setMode(null)}
           onSubmit={async (payload) => {
@@ -283,7 +284,7 @@ export function StudentsScreen() {
   );
 }
 
-function AddStudentForm({ open, groups, onSubmit, onCancel }) {
+function AddStudentForm({ open, groups, error, onSubmit, onCancel }) {
   const [name, setName] = useState('');
   const [groupId, setGroupId] = useState('');
   const [busy, setBusy] = useState(false);
@@ -301,6 +302,7 @@ function AddStudentForm({ open, groups, onSubmit, onCancel }) {
       open={open}
       onClose={onCancel}
       title="إضافة طالب"
+      error={error}
       description="يُنشأ رمز دخول مؤقت للطالب بعد الحفظ."
       size="sm"
     >

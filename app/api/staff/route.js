@@ -50,6 +50,37 @@ const bodySchema = z.discriminatedUnion('action', [
   assignSchema,
 ]);
 
+/**
+ * Turns a write failure into something the reader can act on.
+ *
+ * This route is super-admin only, so echoing the underlying message costs
+ * nothing and saves a round trip through the server logs. "تعذّر إنشاء الحساب"
+ * on its own told you that something broke and nothing else — including, most
+ * commonly, that a migration had not been run yet.
+ */
+function writeFailure(error, stage) {
+  const message = error?.message ?? '';
+
+  // PostgREST reports a column the migrations have not added yet as a schema
+  // cache miss, which reads like an internal fault but is really a to-do.
+  if (error?.code === 'PGRST204' || /could not find the .*column/i.test(message)) {
+    return {
+      error:
+        'قاعدة البيانات غير محدّثة — شغّل الملف supabase/migrations/0011_staff_must_change_password.sql في Supabase ثم أعد المحاولة.',
+      code: 'migration_missing',
+    };
+  }
+
+  if (/already.*registered|already exists|duplicate key/i.test(message)) {
+    return { error: 'اسم المستخدم مستخدم بالفعل', code: 'username_taken' };
+  }
+
+  return {
+    error: `تعذّر إنشاء الحساب أثناء ${stage}: ${message || 'سبب غير معروف'}`,
+    code: 'create_failed',
+  };
+}
+
 async function postHandler(request) {
   const ctx = await requireSuperAdmin(request, { rateKey: 'staff', limit: 100 });
   if (ctx.response) return ctx.response;
@@ -99,7 +130,10 @@ async function postHandler(request) {
       password,
       email_confirm: true,
     });
-    if (authUser.error) return json({ error: 'تعذّر إنشاء الحساب' }, 500);
+    if (authUser.error) {
+      console.error('[staff:create] auth.admin.createUser failed:', authUser.error);
+      return json(writeFailure(authUser.error, 'تسجيل حساب الدخول'), 500);
+    }
 
     const inserted = await db.from('app_users').insert({
       id: authUser.data.user.id,
@@ -111,8 +145,11 @@ async function postHandler(request) {
     });
 
     if (inserted.error) {
+      console.error('[staff:create] app_users insert failed:', inserted.error);
+      // Roll the auth user back so a retry does not collide with a half-created
+      // account that has no profile behind it.
       await db.auth.admin.deleteUser(authUser.data.user.id);
-      return json({ error: 'تعذّر إنشاء الحساب' }, 500);
+      return json(writeFailure(inserted.error, 'حفظ بيانات المشرف'), 500);
     }
 
     await audit({
