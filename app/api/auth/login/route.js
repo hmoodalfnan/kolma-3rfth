@@ -91,7 +91,7 @@ async function postHandler(request) {
   if (input.mode === 'staff') {
     const { data: profile } = await db
       .from('app_users')
-      .select('id, role, display_name, is_active')
+      .select('id, role, display_name, is_active, must_change_password')
       .eq('id', auth.user.id)
       .maybeSingle();
 
@@ -125,8 +125,14 @@ async function postHandler(request) {
         session: auth.session,
         role: profile.role,
         displayName: profile.display_name,
-        mustChangePassword: false,
-        redirect: profile.role === 'super_admin' ? '/admin/global-board' : '/schedules',
+        mustChangePassword: profile.must_change_password,
+        // A generated temporary password is a shared secret until its owner
+        // replaces it, so nothing else is reachable until they do.
+        redirect: profile.must_change_password
+          ? '/change-password'
+          : profile.role === 'super_admin'
+            ? '/admin/global-board'
+            : '/schedules',
       },
       200,
     );

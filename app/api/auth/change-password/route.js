@@ -81,8 +81,9 @@ async function postHandler(request) {
   } else {
     const { data } = await db
       .from('app_users')
-      .select('id, username, role')
+      .update({ must_change_password: false })
       .eq('id', user.id)
+      .select('id, username, role')
       .maybeSingle();
     profile = data;
   }

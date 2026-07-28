@@ -4,21 +4,21 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Select } from '@/components/ui/Field';
 import { SkeletonList } from '@/components/ui/Skeleton';
-import { useToast } from '@/components/ui/Toast';
+import { Modal, ModalActions } from '@/components/ui/Modal';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
+import { CredentialsModal } from '@/components/manage/CredentialsModal';
 import { getBrowserClient } from '@/lib/supabase/browser';
 import { post } from '@/lib/manage/api';
 import { useSchedule } from '@/lib/manage/useSchedule';
-import { validateStaffPassword } from '@/lib/auth/password';
 import { ROLE_LABELS } from '@/lib/auth/guard';
 
 export function StaffScreen() {
-  const toast = useToast();
   const { schedules } = useSchedule();
 
   const [staff, setStaff] = useState(null);
   const [assignments, setAssignments] = useState({});
   const [creating, setCreating] = useState(false);
+  const [credentials, setCredentials] = useState(null);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -74,23 +74,36 @@ export function StaffScreen() {
 
       <Panel
         title="حسابات المشرفين"
-        action={<Button onClick={() => setCreating((v) => !v)}>{creating ? 'إلغاء' : 'حساب جديد'}</Button>}
+        action={<Button onClick={() => setCreating(true)}>حساب جديد</Button>}
       >
-        {creating && (
-          <StaffForm
-            onCancel={() => setCreating(false)}
-            onSubmit={async (values) => {
-              try {
-                await post('/api/staff', { action: 'create', ...values });
-                setCreating(false);
-                await load();
-                toast.push('تم إنشاء الحساب', 'success');
-              } catch (err) {
-                setError(err.message);
-              }
-            }}
-          />
-        )}
+        <StaffForm
+          open={creating}
+          onCancel={() => setCreating(false)}
+          onSubmit={async (values) => {
+            try {
+              const result = await post('/api/staff', { action: 'create', ...values });
+              setCreating(false);
+              await load();
+              setCredentials({
+                title: 'تم إنشاء الحساب',
+                displayName: values.displayName,
+                username: result.username,
+                password: result.password,
+              });
+            } catch (err) {
+              setError(err.message);
+            }
+          }}
+        />
+
+        <CredentialsModal
+          open={Boolean(credentials)}
+          onClose={() => setCredentials(null)}
+          title={credentials?.title}
+          displayName={credentials?.displayName}
+          username={credentials?.username}
+          password={credentials?.password}
+        />
 
         {staff === null ? (
           <SkeletonList rows={5} />
@@ -159,26 +172,23 @@ export function StaffScreen() {
                     tone="ghost"
                     className="min-h-0 px-2 py-1 text-xs"
                     onClick={async () => {
-                      const pw = window.prompt('كلمة المرور الجديدة (8 أحرف على الأقل)');
-                      if (!pw) return;
-                      const policy = validateStaffPassword(pw);
-                      if (!policy.ok) {
-                        setError(policy.error);
-                        return;
-                      }
                       try {
-                        await post('/api/staff', {
+                        const result = await post('/api/staff', {
                           action: 'reset_password',
                           userId: u.id,
-                          newPassword: pw,
                         });
-                        toast.push('تم تغيير كلمة المرور', 'success');
+                        setCredentials({
+                          title: `كلمة مرور جديدة لـ ${u.display_name}`,
+                          displayName: u.display_name,
+                          username: result.username,
+                          password: result.password,
+                        });
                       } catch (err) {
                         setError(err.message);
                       }
                     }}
                   >
-                    تغيير كلمة المرور
+                    كلمة مرور جديدة
                   </Button>
                 </div>
 
@@ -214,74 +224,74 @@ export function StaffScreen() {
   );
 }
 
-function StaffForm({ onSubmit, onCancel }) {
+function StaffForm({ open, onSubmit, onCancel }) {
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [role, setRole] = useState('manager');
-  const [password, setPassword] = useState('');
-  const [localError, setLocalError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Reopening after a successful create should offer an empty form, not the
+  // previous supervisor's details.
+  useEffect(() => {
+    if (open) {
+      setUsername('');
+      setDisplayName('');
+      setRole('manager');
+    }
+  }, [open]);
+
   return (
-    <form
-      className="grid gap-3 rounded-xl border border-line p-3 sm:grid-cols-2"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const policy = validateStaffPassword(password);
-        if (!policy.ok) {
-          setLocalError(policy.error);
-          return;
-        }
-        setBusy(true);
-        await onSubmit({ username, displayName, role, password });
-        setBusy(false);
-      }}
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title="حساب مشرف جديد"
+      description="تُنشأ كلمة المرور تلقائياً وتظهر مرة واحدة بعد الحفظ."
+      size="sm"
     >
-      <Field label="اسم المستخدم" htmlFor="uname" hint="أحرف إنجليزية وأرقام وشرطة سفلية فقط">
-        <Input
-          id="uname"
-          dir="ltr"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-        />
-      </Field>
+      <form
+        className="grid gap-3"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          await onSubmit({ username, displayName, role });
+          setBusy(false);
+        }}
+      >
+        <Field label="اسم المستخدم" htmlFor="uname" hint="أحرف إنجليزية وأرقام وشرطة سفلية فقط">
+          <Input
+            id="uname"
+            dir="ltr"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+        </Field>
 
-      <Field label="الاسم المعروض" htmlFor="dname">
-        <Input
-          id="dname"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          required
-        />
-      </Field>
+        <Field label="الاسم المعروض" htmlFor="dname">
+          <Input
+            id="dname"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            required
+          />
+        </Field>
 
-      <Field label="الصلاحية" htmlFor="urole">
-        <Select id="urole" value={role} onChange={(e) => setRole(e.target.value)}>
-          <option value="manager">مشرف</option>
-          <option value="super_admin">مشرف عام</option>
-        </Select>
-      </Field>
+        <Field label="الصلاحية" htmlFor="urole">
+          <Select id="urole" value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="manager">مشرف</option>
+            <option value="super_admin">مشرف عام</option>
+          </Select>
+        </Field>
 
-      <Field label="كلمة المرور" htmlFor="upass" error={localError}>
-        <Input
-          id="upass"
-          type="password"
-          dir="ltr"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-      </Field>
-
-      <div className="flex gap-2 sm:col-span-2">
-        <Button type="submit" loading={busy}>
-          إنشاء
-        </Button>
-        <Button tone="ghost" onClick={onCancel}>
-          إلغاء
-        </Button>
-      </div>
-    </form>
+        <ModalActions>
+          <Button type="submit" loading={busy}>
+            إنشاء الحساب
+          </Button>
+          <Button tone="ghost" onClick={onCancel}>
+            إلغاء
+          </Button>
+        </ModalActions>
+      </form>
+    </Modal>
   );
 }

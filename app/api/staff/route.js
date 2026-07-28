@@ -1,7 +1,7 @@
 import { safeHandler } from '@/lib/http/safe-handler';
 import { requireSuperAdmin } from '@/lib/http/guard';
 import { clientIp, userAgent, jsonResponse as json } from '@/lib/http/request-context';
-import { validateStaffPassword } from '@/lib/auth/password';
+import { generateStaffPassword } from '@/lib/auth/password';
 import { staffEmail, isValidUsername, normalizeUsername } from '@/lib/auth/identity';
 import { writeAudit } from '@/lib/audit/write';
 import { z } from 'zod';
@@ -15,7 +15,6 @@ const createSchema = z
     username: z.string(),
     displayName: z.string().trim().min(1).max(120),
     role: z.enum(['manager', 'super_admin']),
-    password: z.string().min(8).max(128),
   })
   .strict();
 
@@ -33,7 +32,6 @@ const passwordSchema = z
   .object({
     action: z.literal('reset_password'),
     userId: z.string().uuid(),
-    newPassword: z.string().min(8).max(128),
   })
   .strict();
 
@@ -84,8 +82,10 @@ async function postHandler(request) {
     }
     const username = normalizeUsername(input.username);
 
-    const policy = validateStaffPassword(input.password);
-    if (!policy.ok) return json({ error: policy.error }, 400);
+    // Generated here rather than in the browser: the client is not a trusted
+    // source of entropy, and this is the only moment the value exists in the
+    // clear. It is returned once, never stored, and never recoverable.
+    const password = generateStaffPassword();
 
     const { data: taken } = await db
       .from('app_users')
@@ -96,7 +96,7 @@ async function postHandler(request) {
 
     const authUser = await db.auth.admin.createUser({
       email: staffEmail(username),
-      password: input.password,
+      password,
       email_confirm: true,
     });
     if (authUser.error) return json({ error: 'تعذّر إنشاء الحساب' }, 500);
@@ -106,6 +106,7 @@ async function postHandler(request) {
       username,
       display_name: input.displayName,
       role: input.role,
+      must_change_password: true,
       created_by: profile.id,
     });
 
@@ -119,7 +120,7 @@ async function postHandler(request) {
       action: 'create',
       after: { username, role: input.role, displayName: input.displayName },
     });
-    return json({ id: authUser.data.user.id, username }, 200);
+    return json({ id: authUser.data.user.id, username, password }, 200);
   }
 
   if (input.action === 'update') {
@@ -149,16 +150,23 @@ async function postHandler(request) {
   }
 
   if (input.action === 'reset_password') {
-    const policy = validateStaffPassword(input.newPassword);
-    if (!policy.ok) return json({ error: policy.error }, 400);
+    const { data: target } = await db
+      .from('app_users')
+      .select('id, username')
+      .eq('id', input.userId)
+      .maybeSingle();
+    if (!target) return json({ error: 'الحساب غير موجود' }, 404);
 
-    const updated = await db.auth.admin.updateUserById(input.userId, {
-      password: input.newPassword,
-    });
+    const password = generateStaffPassword();
+
+    const updated = await db.auth.admin.updateUserById(input.userId, { password });
     if (updated.error) return json({ error: 'تعذّر تغيير كلمة المرور' }, 500);
 
+    // The reset is only half done until the owner replaces what we generated.
+    await db.from('app_users').update({ must_change_password: true }).eq('id', input.userId);
+
     await audit({ entityId: input.userId, action: 'reset_password' });
-    return json({ ok: true }, 200);
+    return json({ username: target.username, password }, 200);
   }
 
   // assign
