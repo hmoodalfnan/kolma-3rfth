@@ -16,6 +16,12 @@ export const metadata = {
   manifest: '/manifest.webmanifest',
 };
 
+// A per-request CSP nonce cannot be baked into a statically prerendered page, and
+// without the nonce `strict-dynamic` blocks every script. Every route here is an
+// auth-gated client component that fetches its own data, so there was nothing worth
+// static-generating: only the HTML shell becomes dynamic.
+export const dynamic = 'force-dynamic';
+
 export const viewport = {
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#2A3563' },
