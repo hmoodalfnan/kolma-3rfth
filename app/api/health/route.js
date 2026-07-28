@@ -61,6 +61,12 @@ export async function GET() {
     }
   }
 
+  // Variable NAMES only — never a value, not even a prefix. This is what tells
+  // you whether a credential was saved under an unexpected name, saved to the
+  // wrong environment, or simply never saved.
+  const relevant = /SUPABASE|AUTH_EMAIL|WEBAUTHN/i;
+  const seenNames = Object.keys(process.env).filter((k) => relevant.test(k)).sort();
+
   return jsonResponse(
     {
       ok: missing.length === 0 && database === 'ok' && warnings.length === 0,
@@ -72,6 +78,13 @@ export async function GET() {
       warnings,
       database,
       detail,
+      diagnostics: {
+        // If this array is empty, nothing Supabase-related reached this build.
+        supabaseVarNamesSeen: seenNames,
+        vercelEnv: process.env.VERCEL_ENV ?? null,
+        deploymentUrl: process.env.VERCEL_URL ?? null,
+        commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
+      },
     },
     200,
   );
