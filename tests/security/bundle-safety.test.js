@@ -24,13 +24,30 @@ describe('client bundle safety', () => {
     expect(files.length).toBeGreaterThan(20);
   });
 
-  it('never references the service role key outside lib/supabase/server.js', () => {
+  // Only these two may name a secret credential, and both are server-only.
+  const SECRET_ALLOWED = ['lib/supabase/env.server.js'];
+
+  it('never references a secret Supabase key outside the server-only config', () => {
+    const secretNames = /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|SUPABASE_SERVICE_KEY/;
+
     const offenders = files
-      .filter((f) => readFileSync(f, 'utf8').includes('SUPABASE_SERVICE_ROLE_KEY'))
+      .filter((f) => secretNames.test(readFileSync(f, 'utf8')))
       .map(rel)
-      .filter((f) => f !== 'lib/supabase/server.js' && !f.startsWith('tests/'));
+      .filter((f) => !SECRET_ALLOWED.includes(f) && !f.startsWith('tests/'));
 
     expect(offenders).toEqual([]);
+  });
+
+  it('keeps the client-importable config free of any secret name', () => {
+    // lib/supabase/env.js is imported by the browser client, so a secret name
+    // must never appear in it.
+    const src = readFileSync(path.join(ROOT, 'lib/supabase/env.js'), 'utf8');
+    expect(src).not.toMatch(/SERVICE_ROLE|SECRET_KEY|SERVICE_KEY/);
+  });
+
+  it('marks the server-only config as server-only', () => {
+    const src = readFileSync(path.join(ROOT, 'lib/supabase/env.server.js'), 'utf8');
+    expect(src).toMatch(/^import 'server-only';/m);
   });
 
   it('never imports the server Supabase module from a client component', () => {
@@ -91,10 +108,23 @@ describe('client bundle safety', () => {
     expect(unvalidated).toEqual([]);
   });
 
-  it('keeps the anon key, not the service key, in the browser client', () => {
+  it('builds the browser client from public config only', () => {
     const src = readFileSync(path.join(ROOT, 'lib/supabase/browser.js'), 'utf8');
-    expect(src).toContain('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-    expect(src).not.toContain('SERVICE_ROLE');
+    expect(src).toMatch(/from '\.\/env'/);
+    expect(src).not.toMatch(/env\.server/);
+    expect(src).not.toMatch(/SERVICE_ROLE|SECRET_KEY|SERVICE_KEY/);
+  });
+
+  it('only inlines NEXT_PUBLIC_ names into the client bundle', () => {
+    const src = readFileSync(path.join(ROOT, 'lib/supabase/env.js'), 'utf8');
+    const referenced = [...src.matchAll(/process\.env\.([A-Z0-9_]+)/g)].map((m) => m[1]);
+
+    expect(referenced.length).toBeGreaterThan(0);
+    for (const name of referenced) {
+      expect(name, `${name} is not NEXT_PUBLIC_ and would be undefined in the browser`).toMatch(
+        /^NEXT_PUBLIC_/,
+      );
+    }
   });
 
   it('marks the server Supabase module as server-only', () => {
