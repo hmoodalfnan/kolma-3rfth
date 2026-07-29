@@ -218,7 +218,7 @@ describe('validateDrafts', () => {
   });
 
   it('turns the phone into the digits wa.me needs', () => {
-    expect(check({ phone: '1234-5678' }).phone_link).toBe('96612345678');
+    expect(check({ phone: '1234-5678' }).phone_link).toBe('97312345678');
     expect(check({ phone: '' }).phone_link).toBe('');
   });
 

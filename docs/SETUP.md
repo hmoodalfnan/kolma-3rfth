@@ -83,7 +83,8 @@ Open <http://localhost:3000/login> and sign in as `mohammed`.
    guidance sits above the table and is never imported, so there is nothing to delete.
    After uploading you get a review screen: every name is listed, broken rows first
    (empty name, a PIN that is not 6 digits, a phone that is not 8 digits, an unknown
-   group), and a one-word name is flagged as a warning you can accept. Fix or delete rows
+   group), and a one-word name is flagged as a warning you can accept. Phones are typed
+   as the 8-digit local number; `+973` is added when the WhatsApp link is built. Fix or delete rows
    in place — the good ones import either way, so a bad row never costs you the upload.
    **Print the PIN sheet immediately** — those temp PINs are never shown again.
 7. Share the join link (**الرحلات → رابط الرحلة**). Students pick their name, enter the
