@@ -32,6 +32,7 @@ export function StudentsScreen() {
   const [groupFilter, setGroupFilter] = useState('all');
   const [mode, setMode] = useState(null);
   const [pinSheet, setPinSheet] = useState([]);
+  const [pinPhones, setPinPhones] = useState({});
   const [error, setError] = useTransientError();
 
   const load = useCallback(async () => {
@@ -121,7 +122,11 @@ export function StudentsScreen() {
           entries={pinSheet}
           scheduleName={current.name}
           slug={current.slug}
-          onClose={() => setPinSheet([])}
+          phones={pinPhones}
+          onClose={() => {
+            setPinSheet([]);
+            setPinPhones({});
+          }}
         />
       )}
 
@@ -163,10 +168,14 @@ export function StudentsScreen() {
           {mode === 'import' && (
             <ImportWizard
               groups={groups}
+              scheduleName={current.name}
               onCancel={() => setMode(null)}
-              onImport={async (payload) => {
+              onImport={async ({ phones, ...payload }) => {
                 const result = await createStudents({ scheduleId: current.id, ...payload });
                 setPinSheet((prev) => [...prev, ...result.created]);
+                // Phones are never sent to the server, so they are merged in
+                // here purely to build the WhatsApp links.
+                setPinPhones((prev) => ({ ...prev, ...(phones ?? {}) }));
                 await load();
                 return result;
               }}
@@ -254,11 +263,19 @@ export function StudentsScreen() {
                     <button
                       type="button"
                       onClick={() => toggleActive(s)}
-                      className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                        s.is_active ? 'bg-ok text-ok-ink' : 'bg-line text-muted'
+                      aria-pressed={s.is_active}
+                      title="اضغط لتغيير الحالة"
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition hover:opacity-80 ${
+                        s.is_active
+                          ? 'border-ok-ink/30 bg-ok text-ok-ink'
+                          : 'border-line bg-surface text-muted'
                       }`}
                     >
+                      <span aria-hidden="true">{s.is_active ? '●' : '○'}</span>
                       {s.is_active ? 'نشط' : 'معطّل'}
+                      <span aria-hidden="true" className="opacity-60">
+                        ⇄
+                      </span>
                     </button>
 
                     <Button
@@ -323,11 +340,19 @@ export function StudentsScreen() {
                           <button
                             type="button"
                             onClick={() => toggleActive(s)}
-                            className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                              s.is_active ? 'bg-ok text-ok-ink' : 'bg-line text-muted'
+                            aria-pressed={s.is_active}
+                            title="اضغط لتغيير الحالة"
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition hover:opacity-80 ${
+                              s.is_active
+                                ? 'border-ok-ink/30 bg-ok text-ok-ink'
+                                : 'border-line bg-surface text-muted'
                             }`}
                           >
+                            <span aria-hidden="true">{s.is_active ? '●' : '○'}</span>
                             {s.is_active ? 'نشط' : 'معطّل'}
+                            <span aria-hidden="true" className="opacity-60">
+                              ⇄
+                            </span>
                           </button>
                         </td>
                         <td className="p-2">
