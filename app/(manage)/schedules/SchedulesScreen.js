@@ -21,6 +21,7 @@ import {
 } from '@/lib/manage/api';
 import { todayInRiyadh } from '@/lib/schedule-time/day';
 import { JoinLinkRow } from './JoinLinkRow';
+import { ScheduleStaffPanel } from './ScheduleStaffPanel';
 
 export function SchedulesScreen() {
   const { schedules, current, currentId, select, reload } = useSchedule();
@@ -93,6 +94,7 @@ export function SchedulesScreen() {
       </Panel>
 
       {current && <ScheduleSettings key={current.id} schedule={current} onChanged={reload} />}
+      {current && <ScheduleStaffPanel key={`st-${current.id}`} schedule={current} />}
       {current && <GroupsPanel key={`g-${current.id}`} schedule={current} />}
     </div>
   );

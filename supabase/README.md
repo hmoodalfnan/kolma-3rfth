@@ -18,6 +18,9 @@ Paste one file, press Run, wait for `Success. No rows returned`, then move to th
     a generated temporary password
 12. `migrations/0012_create_schedule_rpc.sql` — lets a manager create a trip and reach
     it afterwards, and repairs trips whose manager was left without access
+13. `migrations/0013_question_titles.sql` — drops the rak'ah count from the sunnah titles
+14. `migrations/0014_schedule_staff_assignment.sql` — lets managers staff their own
+    trips, with the trip's owner removable only by a super admin
 
 Migrations 9 and 10 are safe to run on a project that is already live, and
 migration 10 is safe to re-run. If sign-in reports `Could not find the table

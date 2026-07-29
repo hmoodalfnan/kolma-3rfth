@@ -154,6 +154,7 @@ describe('database migrations', () => {
       '0011_staff_must_change_password.sql',
       '0012_create_schedule_rpc.sql',
       '0013_question_titles.sql',
+      '0014_schedule_staff_assignment.sql',
     ]);
   });
 
