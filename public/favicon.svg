@@ -1,22 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="المتابع الإيماني">
-  <!-- At 16px the eight rays turn to mud, so the favicon keeps the crescent and
-       the four axis rays only. -->
+  <!-- Same idea as icon.svg, but the frame is dropped and the tick thickened:
+       at 16px the open box turns to mud and only the mark survives. -->
   <defs>
-    <mask id="crescent">
-      <rect width="512" height="512" fill="black"/>
-      <circle cx="244" cy="266" r="118" fill="white"/>
-      <circle cx="298" cy="222" r="106" fill="black"/>
-    </mask>
+    <linearGradient id="gold" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#C9A227"/>
+      <stop offset="0.55" stop-color="#F4E3A8"/>
+      <stop offset="1" stop-color="#E8CF7A"/>
+    </linearGradient>
   </defs>
 
-  <rect width="512" height="512" rx="96" fill="#1E2749"/>
+  <rect width="512" height="512" rx="104" fill="#1E2749"/>
 
-  <g fill="#C9A227">
-    <path d="M256 54 L272 168 L256 186 L240 168 Z"/>
-    <path d="M256 458 L240 344 L256 326 L272 344 Z"/>
-    <path d="M54 256 L168 240 L186 256 L168 272 Z"/>
-    <path d="M458 256 L344 272 L326 256 L344 240 Z"/>
-  </g>
-
-  <rect width="512" height="512" fill="#F2DE9A" mask="url(#crescent)"/>
+  <path
+    d="M140 262 L224 346 L392 138"
+    fill="none" stroke="url(#gold)" stroke-width="66"
+    stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -96,6 +96,55 @@ grant execute on function create_schedule(text, text, date, date, int, int, bool
 -- 2. Unique trip names
 -- ---------------------------------------------------------------------------
 
+-- Duplicates already exist — two trips called "تست" — and an index cannot be
+-- built over them. Rename the later ones first, keeping the oldest untouched so
+-- whoever has been using it sees no change. "تست" and "تست" become "تست" and
+-- "تست (2)".
+--
+-- Looped because a rename can itself collide with a name that already exists
+-- ("تست (2)" being taken). Bounded so a pathological set cannot spin forever;
+-- five passes is far past anything realistic.
+do $$
+declare passes int := 0;
+begin
+  loop
+    exit when not exists (
+      select 1 from schedules group by lower(btrim(name)) having count(*) > 1
+    );
+
+    passes := passes + 1;
+    exit when passes > 5;
+
+    with ranked as (
+      select id,
+             row_number() over (
+               partition by lower(btrim(name)) order by created_at, id
+             ) as rn
+      from schedules
+    )
+    update schedules s
+    set name = btrim(s.name) || ' (' || r.rn || ')'
+    from ranked r
+    where s.id = r.id and r.rn > 1;
+  end loop;
+
+  -- Last resort: a short slice of the id is unique by construction, so the
+  -- index below can always be built even if the numbering kept colliding.
+  if exists (select 1 from schedules group by lower(btrim(name)) having count(*) > 1) then
+    with ranked as (
+      select id,
+             row_number() over (
+               partition by lower(btrim(name)) order by created_at, id
+             ) as rn
+      from schedules
+    )
+    update schedules s
+    set name = btrim(s.name) || ' (' || substr(replace(s.id::text, '-', ''), 1, 4) || ')'
+    from ranked r
+    where s.id = r.id and r.rn > 1;
+  end if;
+end $$;
+
 -- Renames go through a plain UPDATE, so the guard has to live in the database
 -- rather than only inside create_schedule.
 create unique index if not exists schedules_name_unique

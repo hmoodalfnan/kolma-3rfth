@@ -1,51 +1,36 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="المتابع الإيماني">
   <!--
-    A compass rose that resolves into a crescent.
+    A tick that breaks out of its own box.
 
-    Eight rays for the directions a journey can take, around a crescent made
-    from the negative space between two offset circles rather than drawn
-    literally. Nothing in common with the previous rub-el-hizb mark.
+    The frame is drawn as an open path with a gap at the top-right, and the
+    tick's long arm leaves through it. The idea is the point of the app: the box
+    is the day's checklist, and the mark carries past it.
 
-    Geometry is measured from the centre in radii: crescent ends at r=80, rays
-    run r=100→200, ring sits at r=150. Everything stays inside r=204, which is
-    Android's maskable safe zone, and the background is full-bleed because iOS
-    composites apple-touch-icon onto white.
+    Full-bleed background because iOS composites apple-touch-icon onto white,
+    and everything stays inside r≈204 of centre for Android's maskable crop.
   -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#313D72"/>
       <stop offset="1" stop-color="#131931"/>
     </linearGradient>
-    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#F4E3A8"/>
-      <stop offset="1" stop-color="#C9A227"/>
+    <linearGradient id="gold" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#C9A227"/>
+      <stop offset="0.55" stop-color="#F4E3A8"/>
+      <stop offset="1" stop-color="#E8CF7A"/>
     </linearGradient>
-    <mask id="crescent">
-      <rect width="512" height="512" fill="black"/>
-      <circle cx="252" cy="258" r="80" fill="white"/>
-      <circle cx="288" cy="230" r="70" fill="black"/>
-    </mask>
   </defs>
 
   <rect width="512" height="512" fill="url(#bg)"/>
 
-  <circle cx="256" cy="256" r="150" fill="none" stroke="url(#gold)" stroke-width="6" opacity="0.3"/>
+  <!-- The box, opened at the top-right so the tick has somewhere to go. -->
+  <path
+    d="M300 116 H172 A56 56 0 0 0 116 172 V340 A56 56 0 0 0 172 396 H340 A56 56 0 0 0 396 340 V246"
+    fill="none" stroke="url(#gold)" stroke-width="24" stroke-linecap="round" opacity="0.5"/>
 
-  <!-- Long rays on the axes: r=100 out to r=200. -->
-  <g fill="url(#gold)">
-    <path d="M256 56 L269 141 L256 156 L243 141 Z"/>
-    <path d="M256 456 L243 371 L256 356 L269 371 Z"/>
-    <path d="M56 256 L141 243 L156 256 L141 269 Z"/>
-    <path d="M456 256 L371 269 L356 256 L371 243 Z"/>
-  </g>
-
-  <!-- Short rays on the diagonals, dimmer so the axes read first. -->
-  <g fill="url(#gold)" opacity="0.45">
-    <path d="M141 141 L217 203 L203 217 Z"/>
-    <path d="M371 141 L309 217 L295 203 Z"/>
-    <path d="M141 371 L203 295 L217 309 Z"/>
-    <path d="M371 371 L295 309 L309 295 Z"/>
-  </g>
-
-  <rect width="512" height="512" fill="url(#gold)" mask="url(#crescent)"/>
+  <!-- The mark itself, exiting through the gap. -->
+  <path
+    d="M172 258 L242 330 L400 128"
+    fill="none" stroke="url(#gold)" stroke-width="46"
+    stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
