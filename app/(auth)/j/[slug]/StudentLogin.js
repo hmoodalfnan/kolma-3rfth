@@ -8,6 +8,42 @@ import { PinInput } from '@/components/ui/PinInput';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { applySession } from '@/lib/auth/session';
 
+/**
+ * Two numbered steps, always visible.
+ *
+ * A student opening this link has never seen the app. Without them the page is
+ * a search box and a list with no indication that a PIN comes next, or that
+ * picking a name is not itself signing in.
+ */
+function Steps({ current }) {
+  const steps = [
+    { n: 1, label: 'اختر اسمك' },
+    { n: 2, label: 'اكتب رمزك' },
+  ];
+
+  return (
+    <ol className="flex items-center justify-center gap-2 text-xs">
+      {steps.map((s, i) => (
+        <li key={s.n} className="flex items-center gap-2">
+          <span
+            className={`flex size-6 items-center justify-center rounded-full font-bold ${
+              current >= s.n ? 'bg-accent text-accent-ink' : 'bg-line text-muted'
+            }`}
+          >
+            {s.n}
+          </span>
+          <span className={current >= s.n ? 'font-semibold' : 'text-muted'}>{s.label}</span>
+          {i < steps.length - 1 && (
+            <span aria-hidden="true" className="text-muted">
+              ←
+            </span>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export function StudentLogin({ slug }) {
   const router = useRouter();
   const [state, setState] = useState({ status: 'loading' });
@@ -99,17 +135,23 @@ export function StudentLogin({ slug }) {
   if (selected) {
     return (
       <form onSubmit={submit} className="card space-y-5 p-6">
-        <div className="text-center">
-          <p className="text-sm text-muted">{state.schedule.name}</p>
-          <h2 className="mt-1 text-lg font-bold">{selected.full_name}</h2>
+        <Steps current={2} />
+
+        <div className="rounded-xl bg-chip p-3 text-center">
+          <p className="text-xs text-muted">أنت تدخل باسم</p>
+          <h2 className="mt-0.5 text-xl font-bold">{selected.full_name}</h2>
           {selected.group_id && (
-            <p className="text-xs text-muted">{groupName(selected.group_id)}</p>
+            <p className="text-xs text-muted">مجموعة: {groupName(selected.group_id)}</p>
           )}
         </div>
 
-        <Field label="الرمز السري (6 أرقام)" error={error}>
+        <Field label="اكتب رمزك السري (٦ أرقام)" error={error}>
           <PinInput value={pin} onChange={setPin} length={6} label="الرمز السري" />
         </Field>
+
+        <p className="text-center text-xs text-muted">
+          الرمز وصلك من المشرف. نسيته؟ اطلب منه إعادة تعيينه.
+        </p>
 
         <Button type="submit" loading={busy} className="w-full">
           دخول
@@ -131,9 +173,12 @@ export function StudentLogin({ slug }) {
 
   return (
     <div className="card space-y-4 p-6">
+      <Steps current={1} />
+
       <div className="text-center">
-        <h2 className="text-lg font-bold">{state.schedule.name}</h2>
-        <p className="mt-1 text-sm text-muted">اختر اسمك من القائمة</p>
+        <p className="text-sm text-muted">رحلة: {state.schedule.name}</p>
+        <h2 className="mt-1 text-xl font-bold">ابحث عن اسمك واضغط عليه</h2>
+        <p className="mt-1 text-sm text-muted">ثم اكتب رمزك السري في الخطوة التالية.</p>
       </div>
 
       {state.schedule.archived && (
@@ -144,7 +189,7 @@ export function StudentLogin({ slug }) {
 
       <Input
         type="search"
-        placeholder="ابحث عن اسمك…"
+        placeholder="اكتب أول حروف اسمك…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         aria-label="ابحث عن اسمك"
@@ -170,7 +215,7 @@ export function StudentLogin({ slug }) {
                 groupId === g.id ? 'bg-accent text-accent-ink' : 'bg-chip text-brand'
               }`}
             >
-              {g.name}
+              مجموعة: {g.name}
             </button>
           ))}
         </div>
@@ -182,15 +227,24 @@ export function StudentLogin({ slug }) {
             <button
               type="button"
               onClick={() => setSelected(s)}
-              className="flex w-full items-center justify-between rounded-xl border border-line bg-panel px-3 py-3 text-right transition hover:border-accent hover:bg-chip"
+              className="flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-panel px-3 py-3.5 text-right transition hover:border-accent hover:bg-chip"
             >
-              <span className="font-semibold">{s.full_name}</span>
-              <span className="text-xs text-muted">{groupName(s.group_id)}</span>
+              <span className="min-w-0">
+                <span className="block truncate font-semibold">{s.full_name}</span>
+                <span className="block truncate text-xs text-muted">
+                  مجموعة: {groupName(s.group_id)}
+                </span>
+              </span>
+              <span aria-hidden="true" className="shrink-0 text-muted">
+                ‹
+              </span>
             </button>
           </li>
         ))}
         {students.length === 0 && (
-          <li className="py-6 text-center text-sm text-muted">لا يوجد اسم مطابق</li>
+          <li className="py-6 text-center text-sm text-muted">
+            لا يوجد اسم مطابق — جرّب حروفاً أقل، أو راجع المشرف.
+          </li>
         )}
       </ul>
     </div>

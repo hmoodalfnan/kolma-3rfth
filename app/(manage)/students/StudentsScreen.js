@@ -19,6 +19,7 @@ import { fetchStudentTotals } from '@/lib/boards/queries';
 import { getBrowserClient } from '@/lib/supabase/browser';
 import { ImportWizard } from './ImportWizard';
 import { TempPinSheet } from './TempPinSheet';
+import { StudentBreakdown } from '@/components/boards/StudentBreakdown';
 import { useTransientError } from '@/lib/ui/useTransientError';
 
 export function StudentsScreen() {
@@ -33,6 +34,7 @@ export function StudentsScreen() {
   const [mode, setMode] = useState(null);
   const [pinSheet, setPinSheet] = useState([]);
   const [pinPhones, setPinPhones] = useState({});
+  const [viewing, setViewing] = useState(null);
   const [error, setError] = useTransientError();
 
   const load = useCallback(async () => {
@@ -223,8 +225,14 @@ export function StudentsScreen() {
                 <li key={s.id} className="rounded-xl border border-line p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-semibold">{s.full_name}</p>
-                      <p className="mt-0.5 text-xs text-muted">{groupName(s.group_id)}</p>
+                      <button
+                        type="button"
+                        onClick={() => setViewing(s)}
+                        className="text-right font-semibold underline decoration-dotted underline-offset-4"
+                      >
+                        {s.full_name}
+                      </button>
+                      <p className="mt-0.5 text-xs text-muted">مجموعة: {groupName(s.group_id)}</p>
                     </div>
                     <p className="shrink-0 text-lg font-bold tabular-nums text-brand">
                       {Number(totalFor(s.id)?.total_points ?? 0)}
@@ -309,7 +317,13 @@ export function StudentsScreen() {
                     return (
                       <tr key={s.id} className="border-b border-line/60">
                         <td className="p-2 font-semibold">
-                          {s.full_name}
+                          <button
+                            type="button"
+                            onClick={() => setViewing(s)}
+                            className="font-semibold underline decoration-dotted underline-offset-4 hover:text-brand"
+                          >
+                            {s.full_name}
+                          </button>
                           {s.must_change_password && (
                             <span className="ms-2 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-bold text-gold-700">
                               رمز مؤقت
@@ -373,6 +387,25 @@ export function StudentsScreen() {
           </>
         )}
       </Panel>
+
+      {/* The same record the leaderboard opens. One screen for "what has this
+          student done", reachable from wherever the question comes up. */}
+      <StudentBreakdown
+        student={
+          viewing
+            ? {
+                student_id: viewing.id,
+                full_name: viewing.full_name,
+                group_name: groupName(viewing.group_id),
+                answer_points: totalFor(viewing.id)?.answer_points ?? 0,
+                grant_points: totalFor(viewing.id)?.grant_points ?? 0,
+                total_points: totalFor(viewing.id)?.total_points ?? 0,
+              }
+            : null
+        }
+        schedule={current}
+        onClose={() => setViewing(null)}
+      />
     </div>
   );
 }

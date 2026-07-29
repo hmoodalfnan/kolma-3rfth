@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Select } from '@/components/ui/Field';
 import { SkeletonList } from '@/components/ui/Skeleton';
@@ -13,6 +13,8 @@ import {
   updateSchedule,
   rotateScheduleSlug,
   listGroups,
+  listStudents,
+  updateStudent,
   createGroup,
   updateGroup,
   deleteGroup,
@@ -22,6 +24,7 @@ import { todayInRiyadh } from '@/lib/schedule-time/day';
 import { JoinLinkRow } from './JoinLinkRow';
 import { ScheduleStaffPanel } from './ScheduleStaffPanel';
 import { ScheduleRoster } from './ScheduleRoster';
+import { GroupMembersPicker } from './GroupMembersPicker';
 import { useTransientError } from '@/lib/ui/useTransientError';
 
 export function SchedulesScreen() {
@@ -213,23 +216,28 @@ function ScheduleSettings({ schedule, onChanged }) {
       <ErrorText>{error}</ErrorText>
 
       <div className="grid gap-4 sm:grid-cols-2">
+        {/* A slider needed a precise drag to land on a round number, and saved
+            on mouseup — which on a phone fired at the wrong moment or not at
+            all. Discrete choices are the whole useful range anyway. */}
         <Field
-          label={`حد الستريك 🔥: ${row.streak_threshold_pct}٪`}
-          htmlFor="threshold"
-          hint="النسبة التي يجب بلوغها في اليوم ليُحتسب ضمن الستريك"
+          label="حد الستريك 🔥"
+          hint="النسبة التي يجب على الطالب بلوغها في اليوم ليُحتسب ضمن الستريك"
         >
-          <input
-            id="threshold"
-            type="range"
-            min={10}
-            max={100}
-            step={5}
-            value={row.streak_threshold_pct}
-            onChange={(e) => setRow({ ...row, streak_threshold_pct: Number(e.target.value) })}
-            onMouseUp={(e) => patch({ streak_threshold_pct: Number(e.target.value) })}
-            onTouchEnd={(e) => patch({ streak_threshold_pct: Number(e.target.value) })}
-            className="w-full"
-          />
+          <div className="flex flex-wrap gap-1.5">
+            {[50, 60, 70, 80, 90, 100].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => patch({ streak_threshold_pct: n })}
+                aria-pressed={row.streak_threshold_pct === n}
+                className={`min-w-14 rounded-lg px-3 py-2 text-sm font-bold tabular-nums ${
+                  row.streak_threshold_pct === n ? 'chip-selected' : 'chip'
+                }`}
+              >
+                {n}٪
+              </button>
+            ))}
+          </div>
         </Field>
 
         <Field label="أيام التعديل بأثر رجعي" htmlFor="backfill">
@@ -317,19 +325,55 @@ function ScheduleSettings({ schedule, onChanged }) {
 function GroupsPanel({ schedule }) {
   const toast = useToast();
   const [groups, setGroups] = useState(null);
+  const [students, setStudents] = useState([]);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [members, setMembers] = useState(null);
   const [error, setError] = useTransientError();
+
+  const reload = useCallback(async () => {
+    const [g, st] = await Promise.all([listGroups(schedule.id), listStudents(schedule.id)]);
+    setGroups(g);
+    setStudents(st);
+  }, [schedule.id]);
 
   useEffect(() => {
     let alive = true;
-    listGroups(schedule.id)
-      .then((rows) => alive && setGroups(rows))
-      .catch((err) => alive && setError(err.message));
+    reload().catch((err) => alive && setError(err.message));
     return () => {
       alive = false;
     };
-  }, [schedule.id]);
+  }, [reload, setError]);
+
+  // A group is only useful once it has people in it, so membership is settled
+  // in the same breath as creating or renaming it rather than one student at a
+  // time from another screen.
+  async function saveMembers(groupId, chosen) {
+    const before = students;
+    const ids = [...chosen];
+
+    setStudents((rows) =>
+      rows.map((r) => {
+        if (ids.includes(r.id)) return { ...r, group_id: groupId };
+        if (r.group_id === groupId) return { ...r, group_id: null };
+        return r;
+      }),
+    );
+
+    try {
+      const added = before.filter((r) => ids.includes(r.id) && r.group_id !== groupId);
+      const removed = before.filter((r) => !ids.includes(r.id) && r.group_id === groupId);
+
+      await Promise.all([
+        ...added.map((r) => updateStudent(r.id, { group_id: groupId })),
+        ...removed.map((r) => updateStudent(r.id, { group_id: null })),
+      ]);
+      await reload();
+    } catch (err) {
+      setStudents(before);
+      setError(err.message);
+    }
+  }
 
   if (groups === null) {
     return (
@@ -357,6 +401,8 @@ function GroupsPanel({ schedule }) {
             const created = await createGroup(schedule.id, value, groups.length);
             setGroups((g) => [...g, created]);
             setCreating(false);
+            // Straight into "who is in it" — an empty group is not finished.
+            if (students.length > 0) setMembers(created);
           } catch (err) {
             setError(err.message);
           }
@@ -382,14 +428,37 @@ function GroupsPanel({ schedule }) {
         }}
       />
 
+      <MembersModal
+        group={members}
+        students={students}
+        groups={groups}
+        onClose={() => setMembers(null)}
+        onSave={saveMembers}
+      />
+
+      {students.some((st) => !st.group_id) && groups.length > 0 && (
+        <p className="mt-3 rounded-xl bg-gold-100 px-3 py-2 text-sm font-semibold text-gold-700">
+          {students.filter((st) => !st.group_id).length} طالب بلا مجموعة — افتح «الطلاب» في أي
+          مجموعة لإضافتهم.
+        </p>
+      )}
+
       {groups.length === 0 ? (
         <EmptyState>لا توجد مجموعات بعد.</EmptyState>
       ) : (
         <ul className="mt-3 space-y-3">
           {groups.map((g) => (
             <li key={g.id} className="rounded-xl border border-line p-3">
-              <div className="flex items-center gap-2">
-                <p className="min-w-0 flex-1 truncate font-semibold">{g.name}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold">مجموعة: {g.name}</span>
+                  <span className="block text-xs text-muted">
+                    {students.filter((st) => st.group_id === g.id).length} طالب
+                  </span>
+                </p>
+                <Button tone="outline" onClick={() => setMembers(g)}>
+                  الطلاب
+                </Button>
                 <Button tone="outline" onClick={() => setEditing(g)}>
                   تعديل
                 </Button>
@@ -452,6 +521,56 @@ function GroupForm({ open, title, initialName, submitLabel = 'حفظ', error, on
           </Button>
         </ModalActions>
       </form>
+    </Modal>
+  );
+}
+
+function MembersModal({ group, students, groups, onClose, onSave }) {
+  const [selected, setSelected] = useState(() => new Set());
+  const [busy, setBusy] = useState(false);
+
+  // Seeded from the group's current membership each time it opens.
+  useEffect(() => {
+    if (!group) return;
+    setSelected(new Set(students.filter((s) => s.group_id === group.id).map((s) => s.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group]);
+
+  return (
+    <Modal
+      open={Boolean(group)}
+      onClose={onClose}
+      title={group ? `طلاب مجموعة: ${group.name}` : ''}
+      description="اختر من ينتمي لهذه المجموعة. غير المحدَّدين يخرجون منها."
+    >
+      {group && (
+        <>
+          <GroupMembersPicker
+            students={students}
+            groups={groups}
+            currentGroupId={group.id}
+            selected={selected}
+            onChange={setSelected}
+          />
+
+          <ModalActions>
+            <Button
+              loading={busy}
+              onClick={async () => {
+                setBusy(true);
+                await onSave(group.id, selected);
+                setBusy(false);
+                onClose();
+              }}
+            >
+              حفظ
+            </Button>
+            <Button tone="ghost" onClick={onClose}>
+              إلغاء
+            </Button>
+          </ModalActions>
+        </>
+      )}
     </Modal>
   );
 }

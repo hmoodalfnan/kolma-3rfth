@@ -25,6 +25,8 @@ Paste one file, press Run, wait for `Success. No rows returned`, then move to th
     unique trip names, and repairs trips that had no staff at all
 16. `migrations/0016_question_sections.sql` — drops the قيام وضحى heading and renames
     الأذكار to أذكار الصباح والمساء
+17. `migrations/0017_question_review_queue.sql` — flags بنود managers invent so the
+    super admin can add them to the shared library
 
 ## Keeping people signed in
 

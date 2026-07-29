@@ -14,11 +14,13 @@ export function QuestionCard({ question, value, onChange, disabled }) {
   return (
     <div className="space-y-1">
       <Renderer question={question} value={value} onChange={onChange} disabled={disabled} />
-      <div className="flex items-center justify-between px-1">
+      <div className="flex items-start justify-between gap-2 px-1">
         {question.help_text ? (
-          <p className="text-xs text-muted">{question.help_text}</p>
+          // min-w-0 + break-words: a long sentence used to force the row wider
+          // than the phone and push the score chip off screen.
+          <p className="min-w-0 flex-1 break-words text-xs text-muted">{question.help_text}</p>
         ) : (
-          <span />
+          <span className="flex-1" />
         )}
         {max > 0 && (
           <span

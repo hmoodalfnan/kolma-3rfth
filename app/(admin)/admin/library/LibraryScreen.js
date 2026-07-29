@@ -11,6 +11,7 @@ import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
 import { QuestionEditor } from '@/components/questions/editors/QuestionEditor';
 import { getBrowserClient } from '@/lib/supabase/browser';
 import { listLibrary } from '@/lib/manage/api';
+import { SuggestedQuestions } from './SuggestedQuestions';
 import { TYPE_LABELS } from '@/lib/questions/types';
 import { maxPoints } from '@/lib/points/score';
 import { useTransientError } from '@/lib/ui/useTransientError';
@@ -51,6 +52,8 @@ export function LibraryScreen() {
   return (
     <div className="space-y-4">
       <ErrorText>{error}</ErrorText>
+
+      <SuggestedQuestions onAccepted={load} />
 
       <Panel
         title="مكتبة البنود الرئيسية"
