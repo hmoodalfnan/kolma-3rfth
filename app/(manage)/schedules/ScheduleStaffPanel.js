@@ -15,6 +15,7 @@ import {
   unassignScheduleStaff,
 } from '@/lib/manage/api';
 import { ROLE_LABELS } from '@/lib/auth/guard';
+import { useTransientError } from '@/lib/ui/useTransientError';
 
 /**
  * Who runs this trip.
@@ -31,7 +32,8 @@ export function ScheduleStaffPanel({ schedule }) {
   const [me, setMe] = useState(null);
   const [adding, setAdding] = useState(false);
   const [pick, setPick] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useTransientError();
+  const [formError, setFormError] = useTransientError();
 
   const load = useCallback(async () => {
     try {
@@ -67,7 +69,7 @@ export function ScheduleStaffPanel({ schedule }) {
   const available = accounts.filter((a) => !assigned.has(a.id));
 
   async function add(userId) {
-    setError('');
+    setFormError('');
     try {
       await assignScheduleStaff(schedule.id, userId);
       setAssigned(new Set([...assigned, userId]));
@@ -75,7 +77,10 @@ export function ScheduleStaffPanel({ schedule }) {
       setPick('');
       toast.push('تمت إضافة المشرف للرحلة', 'success');
     } catch (err) {
-      setError(err.message);
+      // Reported inside the dialog. On the panel behind it the message was
+      // hidden by the backdrop and only surfaced after closing, which read as
+      // the add having silently worked and then failed later.
+      setFormError(err.message);
     }
   }
 
@@ -107,7 +112,14 @@ export function ScheduleStaffPanel({ schedule }) {
       title="مشرفو الرحلة"
       action={
         available.length > 0 ? (
-          <Button onClick={() => setAdding(true)}>إضافة مشرف</Button>
+          <Button
+            onClick={() => {
+              setFormError('');
+              setAdding(true);
+            }}
+          >
+            إضافة مشرف
+          </Button>
         ) : null
       }
     >
@@ -116,6 +128,7 @@ export function ScheduleStaffPanel({ schedule }) {
       <Modal
         open={adding}
         onClose={() => setAdding(false)}
+        error={formError}
         title="إضافة مشرف للرحلة"
         description="الحسابات الموجودة فقط — لإنشاء حساب جديد استخدم شاشة المشرفين."
         size="sm"

@@ -19,6 +19,7 @@ import { fetchStudentTotals } from '@/lib/boards/queries';
 import { getBrowserClient } from '@/lib/supabase/browser';
 import { ImportWizard } from './ImportWizard';
 import { TempPinSheet } from './TempPinSheet';
+import { useTransientError } from '@/lib/ui/useTransientError';
 
 export function StudentsScreen() {
   const { current } = useSchedule();
@@ -31,7 +32,7 @@ export function StudentsScreen() {
   const [groupFilter, setGroupFilter] = useState('all');
   const [mode, setMode] = useState(null);
   const [pinSheet, setPinSheet] = useState([]);
-  const [error, setError] = useState('');
+  const [error, setError] = useTransientError();
 
   const load = useCallback(async () => {
     if (!current) return;

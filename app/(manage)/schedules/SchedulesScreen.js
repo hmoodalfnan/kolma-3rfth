@@ -22,12 +22,13 @@ import {
 import { todayInRiyadh } from '@/lib/schedule-time/day';
 import { JoinLinkRow } from './JoinLinkRow';
 import { ScheduleStaffPanel } from './ScheduleStaffPanel';
+import { useTransientError } from '@/lib/ui/useTransientError';
 
 export function SchedulesScreen() {
   const { schedules, current, currentId, select, reload } = useSchedule();
   const toast = useToast();
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useTransientError();
 
   if (schedules === null) return <SkeletonList rows={5} className="h-24" />;
 
@@ -189,7 +190,7 @@ function ScheduleForm({ open, initial, title, submitLabel = 'حفظ', error, onS
 function ScheduleSettings({ schedule, onChanged }) {
   const toast = useToast();
   const [row, setRow] = useState(schedule);
-  const [error, setError] = useState('');
+  const [error, setError] = useTransientError();
   const [cloning, setCloning] = useState(false);
 
   useEffect(() => setRow(schedule), [schedule]);
@@ -317,7 +318,7 @@ function GroupsPanel({ schedule }) {
   const [groups, setGroups] = useState(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useTransientError();
 
   useEffect(() => {
     let alive = true;

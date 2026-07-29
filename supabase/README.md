@@ -21,6 +21,14 @@ Paste one file, press Run, wait for `Success. No rows returned`, then move to th
 13. `migrations/0013_question_titles.sql` — drops the rak'ah count from the sunnah titles
 14. `migrations/0014_schedule_staff_assignment.sql` — lets managers staff their own
     trips, with the trip's owner removable only by a super admin
+15. `migrations/0015_manager_trip_control.sql` — lets managers create trips, enforces
+    unique trip names, and repairs trips that had no staff at all
+
+## Keeping people signed in
+
+**Authentication → Sessions:** leave "Time-box user sessions" and "Inactivity
+timeout" unset. With both unset the refresh token does not expire, and the app
+refreshes the access token whenever the tab becomes visible again.
 
 Migrations 9 and 10 are safe to run on a project that is already live, and
 migration 10 is safe to re-run. If sign-in reports `Could not find the table

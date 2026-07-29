@@ -15,19 +15,28 @@ describe('validateStudentPin', () => {
     expect(validateStudentPin('12345').ok).toBe(false);
     expect(validateStudentPin('1234567').ok).toBe(false);
     expect(validateStudentPin('12345a').ok).toBe(false);
-    expect(validateStudentPin('١٢٣٤٥٦').ok).toBe(false);
     expect(validateStudentPin('').ok).toBe(false);
     expect(validateStudentPin(null).ok).toBe(false);
   });
 
-  it('rejects a PIN that is all one digit or a simple run', () => {
-    expect(validateStudentPin('111111').ok).toBe(false);
-    expect(validateStudentPin('123456').ok).toBe(false);
+  // An Arabic keyboard produces these, and \d does not match them. They used to
+  // be rejected, so the PIN simply would not go in.
+  it('accepts Arabic-Indic digits as the same PIN', () => {
+    expect(validateStudentPin('١٢٣٤٥٦').ok).toBe(true);
+    expect(validateStudentPin('۴۸۲۹۱۳').ok).toBe(true);
+    expect(validateStudentPin('٤٨٢٩١').ok).toBe(false);
+  });
+
+  // Deliberately allowed now: these rules rejected every PIN a student found
+  // easy to remember, and the temporary PIN is generated anyway.
+  it('no longer rejects repeated digits or a simple run', () => {
+    expect(validateStudentPin('111111').ok).toBe(true);
+    expect(validateStudentPin('123456').ok).toBe(true);
   });
 });
 
 describe('validateStaffPassword', () => {
-  it('accepts eight or more characters spanning two class types', () => {
+  it('accepts eight or more characters', () => {
     expect(validateStaffPassword('tracker2026').ok).toBe(true);
     expect(validateStaffPassword('Deeds tracker!').ok).toBe(true);
   });
@@ -36,14 +45,15 @@ describe('validateStaffPassword', () => {
     expect(validateStaffPassword('Qaw2026').ok).toBe(false);
   });
 
-  it('rejects a single character class', () => {
-    expect(validateStaffPassword('abcdefghij').ok).toBe(false);
-    expect(validateStaffPassword('1234567890').ok).toBe(false);
+  // Length is the only rule now. The class requirement and the common-password
+  // blocklist mostly pushed people towards something they had to write down.
+  it('accepts a single character class', () => {
+    expect(validateStaffPassword('abcdefghij').ok).toBe(true);
+    expect(validateStaffPassword('1234567890').ok).toBe(true);
   });
 
-  it('rejects common passwords regardless of shape', () => {
-    expect(validateStaffPassword('password1').ok).toBe(false);
-    expect(validateStaffPassword('admin1234').ok).toBe(false);
+  it('rejects anything over the length ceiling', () => {
+    expect(validateStaffPassword('a'.repeat(129)).ok).toBe(false);
   });
 });
 

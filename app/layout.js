@@ -11,10 +11,10 @@ const arabic = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata = {
-  title: 'سجل الأعمال',
+  title: 'المتابع الإيماني',
   description: 'متابعة الأعمال الإيمانية والسلوكية',
   manifest: '/manifest.webmanifest',
-  applicationName: 'سجل الأعمال',
+  applicationName: 'المتابع الإيماني',
   icons: {
     icon: [
       { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
@@ -25,7 +25,7 @@ export const metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: 'سجل الأعمال',
+    title: 'المتابع الإيماني',
     statusBarStyle: 'black-translucent',
   },
   formatDetection: { telephone: false },

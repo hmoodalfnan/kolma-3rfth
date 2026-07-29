@@ -13,13 +13,14 @@ import { getBrowserClient } from '@/lib/supabase/browser';
 import { listLibrary } from '@/lib/manage/api';
 import { TYPE_LABELS } from '@/lib/questions/types';
 import { maxPoints } from '@/lib/points/score';
+import { useTransientError } from '@/lib/ui/useTransientError';
 
 export function LibraryScreen() {
   const toast = useToast();
   const [rows, setRows] = useState(null);
   const [usage, setUsage] = useState({});
   const [editing, setEditing] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useTransientError();
 
   const load = useCallback(async () => {
     setRows(null);

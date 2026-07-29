@@ -62,10 +62,15 @@ export function ManageShell({ children }) {
     profile?.role === 'super_admin' && { key: 'admin', title: 'إدارة النظام', tabs: ADMIN_TABS },
   ].filter(Boolean);
 
+  const currentTab = [...TRIP_TABS, ...GENERAL_TABS, ...ADMIN_TABS].find(
+    (tab) => pathname === tab.href || pathname.startsWith(`${tab.href}/`),
+  );
+
   const nav = (
     <nav className="flex h-full flex-col gap-5 overflow-y-auto px-3 py-4" aria-label="أقسام الإدارة">
       <div className="px-2">
-        <p className="text-sm font-bold text-brand">سجل الأعمال</p>
+        <p className="text-sm font-bold text-brand">المتابع الإيماني</p>
+        {currentTab && <p className="text-sm font-semibold text-ink">{currentTab.label}</p>}
         <p className="truncate text-xs text-muted">
           {profile?.displayName} · {ROLE_LABELS[profile?.role] ?? ''}
         </p>
@@ -141,7 +146,12 @@ export function ManageShell({ children }) {
         >
           ☰
         </button>
-        <p className="min-w-0 flex-1 truncate text-sm font-bold text-brand">سجل الأعمال</p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-brand">المتابع الإيماني</p>
+          {currentTab && (
+            <p className="truncate text-xs text-muted">{currentTab.label}</p>
+          )}
+        </div>
       </header>
 
       {/* Desktop: always present, no toggle. */}

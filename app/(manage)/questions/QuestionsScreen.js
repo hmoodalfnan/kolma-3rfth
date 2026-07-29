@@ -21,6 +21,7 @@ import { groupBySection } from '@/lib/questions/active';
 import { TYPE_LABELS } from '@/lib/questions/types';
 import { WEEKDAY_LABELS } from '@/lib/schedule-time/day';
 import { maxPoints } from '@/lib/points/score';
+import { useTransientError } from '@/lib/ui/useTransientError';
 
 export function QuestionsScreen() {
   const { current } = useSchedule();
@@ -29,7 +30,7 @@ export function QuestionsScreen() {
   const [questions, setQuestions] = useState(null);
   const [editing, setEditing] = useState(null);
   const [showLibrary, setShowLibrary] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useTransientError();
 
   const load = useCallback(async () => {
     if (!current) return;
@@ -247,7 +248,7 @@ export function QuestionsScreen() {
 function LibraryPicker({ existing, onCopy, onCancel }) {
   const [library, setLibrary] = useState(null);
   const [selected, setSelected] = useState(new Set());
-  const [error, setError] = useState('');
+  const [error, setError] = useTransientError();
 
   useEffect(() => {
     listLibrary()

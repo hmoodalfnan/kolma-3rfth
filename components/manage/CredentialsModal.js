@@ -6,7 +6,7 @@ import { Modal, ModalActions } from '@/components/ui/Modal';
 
 function buildMessage({ origin, displayName, username, password }) {
   return [
-    `حياك الله${displayName ? ` يا ${displayName}` : ''}، تم إنشاء حسابك في سجل الأعمال.`,
+    `حياك الله${displayName ? ` يا ${displayName}` : ''}، تم إنشاء حسابك في المتابع الإيماني.`,
     '',
     `الرابط: ${origin}/login`,
     `اسم المستخدم: ${username}`,

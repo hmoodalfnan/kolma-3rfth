@@ -18,6 +18,7 @@ import {
   grantPoints,
   undoGrant,
 } from '@/lib/manage/api';
+import { useTransientError } from '@/lib/ui/useTransientError';
 
 const QUICK = [1, 5, 10, 20];
 
@@ -29,7 +30,7 @@ export function GradingScreen() {
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
   const [grants, setGrants] = useState([]);
-  const [error, setError] = useState('');
+  const [error, setError] = useTransientError();
 
   const load = useCallback(async () => {
     if (!current) return;

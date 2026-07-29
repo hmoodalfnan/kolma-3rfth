@@ -17,6 +17,7 @@ import {
   ENTITY_LABELS,
 } from '@/lib/audit/query';
 import { ROLE_LABELS } from '@/lib/auth/guard';
+import { useTransientError } from '@/lib/ui/useTransientError';
 
 export function AuditView({ scheduleId, title, showScheduleColumn = false }) {
   const [filters, setFilters] = useState({ entityType: '', action: '', from: '', to: '' });
@@ -25,7 +26,7 @@ export function AuditView({ scheduleId, title, showScheduleColumn = false }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [expanded, setExpanded] = useState(null);
   const [actorNames, setActorNames] = useState({});
-  const [error, setError] = useState('');
+  const [error, setError] = useTransientError();
 
   // Best effort: RLS only lets a super admin read the whole staff table, so a
   // manager silently keeps the stored usernames.

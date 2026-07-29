@@ -13,6 +13,7 @@ import { getBrowserClient } from '@/lib/supabase/browser';
 import { post } from '@/lib/manage/api';
 import { useSchedule } from '@/lib/manage/useSchedule';
 import { ROLE_LABELS } from '@/lib/auth/guard';
+import { useTransientError } from '@/lib/ui/useTransientError';
 
 export function StaffScreen() {
   const { schedules } = useSchedule();
@@ -21,8 +22,8 @@ export function StaffScreen() {
   const [assignments, setAssignments] = useState({});
   const [creating, setCreating] = useState(false);
   const [credentials, setCredentials] = useState(null);
-  const [error, setError] = useState('');
-  const [formError, setFormError] = useState('');
+  const [error, setError] = useTransientError();
+  const [formError, setFormError] = useTransientError();
 
   const load = useCallback(async () => {
     setStaff(null);

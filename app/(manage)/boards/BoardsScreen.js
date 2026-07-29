@@ -9,6 +9,7 @@ import { getBrowserClient } from '@/lib/supabase/browser';
 import { useSchedule } from '@/lib/manage/useSchedule';
 import { fetchStudentTotals, fetchGroupTotals, fetchQuestionLeaders, rankRows } from '@/lib/boards/queries';
 import { listQuestions } from '@/lib/manage/api';
+import { useTransientError } from '@/lib/ui/useTransientError';
 
 const TABS = [
   { id: 'overall', label: 'الترتيب العام' },
@@ -19,7 +20,7 @@ const TABS = [
 export function BoardsScreen() {
   const { current } = useSchedule();
   const [tab, setTab] = useState('overall');
-  const [error, setError] = useState('');
+  const [error, setError] = useTransientError();
 
   if (!current) return <EmptyState>اختر رحلة أولاً.</EmptyState>;
 
