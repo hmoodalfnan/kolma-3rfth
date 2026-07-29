@@ -45,31 +45,54 @@ async function postHandler(request) {
   });
   if (gate.data === false) return json({ error: 'محاولات كثيرة، حاول لاحقاً' }, 429);
 
-  if (currentPassword === newPassword) {
+  if (currentPassword && currentPassword === newPassword) {
     return json({ error: 'كلمة المرور الجديدة يجب أن تختلف عن الحالية' }, 400);
   }
 
   const { data: student } = await db
     .from('students')
-    .select('id, schedule_id, full_name')
+    .select('id, schedule_id, full_name, must_change_password')
     .eq('auth_uid', user.id)
     .maybeSingle();
 
   const isStudent = Boolean(student);
 
+  const { data: staffRow } = isStudent
+    ? { data: null }
+    : await db
+        .from('app_users')
+        .select('must_change_password')
+        .eq('id', user.id)
+        .maybeSingle();
+
+  // A first-time change is the account trading in a temporary secret it was
+  // given. Asking for that secret again proves nothing — the person typed it
+  // moments ago to reach this screen — so the valid session is the whole check.
+  // The flag is read from the database, never from the request, so a caller
+  // cannot skip re-authentication by claiming to be new.
+  const isFirstTimeChange = Boolean(
+    isStudent ? student.must_change_password : staffRow?.must_change_password,
+  );
+
   const policy = isStudent ? validateStudentPin(newPassword) : validateStaffPassword(newPassword);
   if (!policy.ok) return json({ error: policy.error }, 400);
 
-  // Re-authenticate before changing anything.
-  const reauth = await db.auth.signInWithPassword({
-    email: user.email,
-    password: currentPassword,
-  });
-  if (reauth.error || !reauth.data?.session) {
-    await db.rpc('auth_record_failure', {
-      p_identifier: isStudent ? `student:${student.id}` : `staff:${user.id}`,
+  if (!isFirstTimeChange) {
+    if (!currentPassword) {
+      return json({ error: 'أدخل كلمة المرور الحالية' }, 400);
+    }
+
+    // Re-authenticate before changing anything.
+    const reauth = await db.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
     });
-    return json({ error: 'كلمة المرور الحالية غير صحيحة' }, 401);
+    if (reauth.error || !reauth.data?.session) {
+      await db.rpc('auth_record_failure', {
+        p_identifier: isStudent ? `student:${student.id}` : `staff:${user.id}`,
+      });
+      return json({ error: 'كلمة المرور الحالية غير صحيحة' }, 401);
+    }
   }
 
   const updated = await db.auth.admin.updateUserById(user.id, { password: newPassword });
@@ -99,7 +122,22 @@ async function postHandler(request) {
     userAgent: userAgent(request),
   });
 
-  return json({ ok: true }, 200);
+  // Changing the password can invalidate the session that was used to change it,
+  // which is why this used to end in a forced sign-out. Minting a fresh session
+  // from the new password lets the caller carry straight on instead — and it
+  // doubles as proof that the new password actually works.
+  const refreshed = await db.auth.signInWithPassword({
+    email: user.email,
+    password: newPassword,
+  });
+
+  const redirect = isStudent
+    ? '/today'
+    : profile?.role === 'super_admin'
+      ? '/admin/global-board'
+      : '/schedules';
+
+  return json({ ok: true, session: refreshed.data?.session ?? null, redirect }, 200);
 }
 
 export const POST = safeHandler('app/api/auth/change-password/route.js:POST', postHandler);

@@ -1,5 +1,7 @@
 'use client';
 
+import { friendlyError } from '@/lib/errors/friendly';
+
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Select } from '@/components/ui/Field';
@@ -30,7 +32,7 @@ export function StaffScreen() {
         client.from('app_users').select('*').order('username'),
         client.from('schedule_staff').select('schedule_id, user_id'),
       ]);
-      if (usersError) throw new Error(usersError.message);
+      if (usersError) throw new Error(friendlyError(usersError));
 
       const map = {};
       for (const link of links ?? []) {

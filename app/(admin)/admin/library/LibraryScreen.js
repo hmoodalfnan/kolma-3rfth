@@ -1,5 +1,7 @@
 'use client';
 
+import { friendlyError } from '@/lib/errors/friendly';
+
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { SkeletonList } from '@/components/ui/Skeleton';
@@ -86,7 +88,7 @@ export function LibraryScreen() {
                         .from('question_library')
                         .insert({ ...payload, sort_order: rows.length })
                     : await client.from('question_library').update(payload).eq('id', editing.id);
-                if (writeError) throw new Error(writeError.message);
+                if (writeError) throw new Error(friendlyError(writeError));
 
                 setEditing(null);
                 await load();

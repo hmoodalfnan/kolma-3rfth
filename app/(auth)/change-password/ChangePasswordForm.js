@@ -1,15 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { PinInput } from '@/components/ui/PinInput';
 import { getBrowserClient } from '@/lib/supabase/browser';
-import { getStoredRole, signOut } from '@/lib/auth/session';
+import { applySession, getStoredRole, patchStoredRole, signOut } from '@/lib/auth/session';
 import { validateStaffPassword, validateStudentPin } from '@/lib/auth/password';
 
 export function ChangePasswordForm() {
+  const router = useRouter();
   const [role, setRole] = useState(null);
+  const [firstTime, setFirstTime] = useState(false);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -18,7 +21,9 @@ export function ChangePasswordForm() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    setRole(getStoredRole()?.role ?? 'manager');
+    const stored = getStoredRole();
+    setRole(stored?.role ?? 'manager');
+    setFirstTime(Boolean(stored?.mustChangePassword));
   }, []);
 
   const isStudent = role === 'student';
@@ -50,7 +55,12 @@ export function ChangePasswordForm() {
       const res = await fetch('/api/auth/change-password', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+        body: JSON.stringify({
+          // Omitted entirely on a first-time change; the server decides whether
+          // it is required by reading the account's own flag.
+          ...(firstTime ? {} : { currentPassword: current }),
+          newPassword: next,
+        }),
       });
       const body = await res.json();
 
@@ -60,8 +70,19 @@ export function ChangePasswordForm() {
       }
 
       setDone(true);
-      // Force a fresh login so the new secret is proven to work.
-      setTimeout(() => signOut(isStudent ? '/login' : '/login'), 1600);
+      patchStoredRole({ mustChangePassword: false });
+
+      // The server hands back a session minted from the new password, so there
+      // is nothing left to prove by making anyone sign in again.
+      if (body.session) {
+        await applySession({ ...getStoredRole(), session: body.session, mustChangePassword: false });
+        router.replace(body.redirect || (isStudent ? '/today' : '/schedules'));
+        return;
+      }
+
+      // No session came back — the password did change, so the only safe way
+      // forward is a fresh sign-in.
+      setTimeout(() => signOut('/login'), 1600);
     } catch {
       setError('تعذّر الاتصال بالخادم');
     } finally {
@@ -73,34 +94,48 @@ export function ChangePasswordForm() {
     return (
       <div className="card p-6 text-center">
         <p className="font-semibold text-emerald-600">تم التغيير بنجاح</p>
-        <p className="mt-2 text-sm text-muted">سيتم تسجيل خروجك لتدخل بالرمز الجديد…</p>
+        <p className="mt-2 text-sm text-muted">جارٍ متابعة الدخول…</p>
       </div>
     );
   }
 
   return (
     <form onSubmit={submit} className="card space-y-4 p-6">
-      <h2 className="text-lg font-bold">{isStudent ? 'تغيير الرمز السري' : 'تغيير كلمة المرور'}</h2>
+      <h2 className="text-lg font-bold">
+        {firstTime
+          ? isStudent
+            ? 'اختر رمزك السري'
+            : 'اختر كلمة المرور الخاصة بك'
+          : isStudent
+            ? 'تغيير الرمز السري'
+            : 'تغيير كلمة المرور'}
+      </h2>
       <p className="text-sm text-muted">
+        {firstTime && 'الرمز الذي دخلت به مؤقت. اختر واحداً خاصاً بك للمتابعة. '}
         {isStudent
           ? 'اختر رمزاً من 6 أرقام تحفظه ولا تشاركه مع أحد.'
           : 'كلمة المرور 8 أحرف على الأقل وتحتوي نوعين مختلفين على الأقل.'}
       </p>
 
-      <Field label={isStudent ? 'الرمز الحالي' : 'كلمة المرور الحالية'}>
-        {isStudent ? (
-          <PinInput value={current} onChange={setCurrent} label="الرمز الحالي" />
-        ) : (
-          <Input
-            type="password"
-            dir="ltr"
-            autoComplete="current-password"
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-            required
-          />
-        )}
-      </Field>
+      {/* Skipped on a first-time change: the temporary secret was just typed at
+          the sign-in screen, so asking for it again is a hurdle without a
+          purpose. */}
+      {!firstTime && (
+        <Field label={isStudent ? 'الرمز الحالي' : 'كلمة المرور الحالية'}>
+          {isStudent ? (
+            <PinInput value={current} onChange={setCurrent} label="الرمز الحالي" />
+          ) : (
+            <Input
+              type="password"
+              dir="ltr"
+              autoComplete="current-password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              required
+            />
+          )}
+        </Field>
+      )}
 
       <Field label={isStudent ? 'الرمز الجديد' : 'كلمة المرور الجديدة'}>
         {isStudent ? (

@@ -75,8 +75,11 @@ function writeFailure(error, stage) {
     return { error: 'اسم المستخدم مستخدم بالفعل', code: 'username_taken' };
   }
 
+  // Anything unrecognised names the step that failed, which is enough to act on,
+  // and keeps the raw database text out of the interface. The full error is in
+  // the server logs.
   return {
-    error: `تعذّر إنشاء الحساب أثناء ${stage}: ${message || 'سبب غير معروف'}`,
+    error: `تعذّر إنشاء الحساب أثناء ${stage}. حاول مرة أخرى، وإن تكرر الخطأ راجع سجلات الخادم.`,
     code: 'create_failed',
   };
 }
