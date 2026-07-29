@@ -47,7 +47,7 @@ export function DailySheet() {
             <div className="mt-2 flex items-center gap-3 text-sm">
               <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2.5 py-1 font-bold text-gold-700">
                 <span aria-hidden="true">🔥</span>
-                {day.streak} يوم
+                ستريك {day.streak} يوم
               </span>
               <span className="tabular-nums text-muted" dir="ltr">
                 {day.points.earned} / {day.points.possible}

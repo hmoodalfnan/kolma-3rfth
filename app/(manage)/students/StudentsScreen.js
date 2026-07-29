@@ -72,7 +72,44 @@ export function StudentsScreen() {
 
   if (!current) return <EmptyState>اختر رحلة أولاً.</EmptyState>;
 
-  const groupName = (id) => groups.find((g) => g.id === id)?.name ?? '—';
+  const groupName = (id) => groups.find((g) => g.id === id)?.name ?? 'بدون مجموعة';
+
+  // Shared by the card and table layouts below so the two never drift apart.
+  // Each writes optimistically and rolls back the single field it touched.
+  const patchRow = (id, patch) =>
+    setStudents((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  async function setGroup(student, groupId) {
+    const before = student.group_id;
+    patchRow(student.id, { group_id: groupId });
+    try {
+      await updateStudent(student.id, { group_id: groupId });
+    } catch (err) {
+      patchRow(student.id, { group_id: before });
+      setError(err.message);
+    }
+  }
+
+  async function toggleActive(student) {
+    const next = !student.is_active;
+    patchRow(student.id, { is_active: next });
+    try {
+      await updateStudent(student.id, { is_active: next });
+    } catch (err) {
+      patchRow(student.id, { is_active: !next });
+      setError(err.message);
+    }
+  }
+
+  async function resetPin(student) {
+    try {
+      const res = await resetStudentPin(student.id);
+      setPinSheet([{ id: student.id, full_name: res.full_name, tempPin: res.tempPin }]);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -167,117 +204,147 @@ export function StudentsScreen() {
         ) : visible.length === 0 ? (
           <EmptyState>لا يوجد طلاب مطابقون.</EmptyState>
         ) : (
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[680px] text-right text-sm">
-              <thead className="border-b border-line text-xs text-muted">
-                <tr>
-                  <th className="p-2 font-semibold">الطالب</th>
-                  <th className="p-2 font-semibold">المجموعة</th>
-                  <th className="p-2 font-semibold">نقاط البنود</th>
-                  <th className="p-2 font-semibold">نقاط التقييم</th>
-                  <th className="p-2 font-semibold">الإجمالي</th>
-                  <th className="p-2 font-semibold">الحالة</th>
-                  <th className="p-2 font-semibold">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((s) => {
-                  const t = totalFor(s.id);
-                  return (
-                    <tr key={s.id} className="border-b border-line/60">
-                      <td className="p-2 font-semibold">
-                        {s.full_name}
-                        {s.must_change_password && (
-                          <span className="ms-2 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-bold text-gold-700">
-                            رمز مؤقت
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-2">
-                        <Select
-                          value={s.group_id ?? ''}
-                          aria-label={`مجموعة ${s.full_name}`}
-                          className="min-h-0 py-1 text-xs"
-                          onChange={async (e) => {
-                            const groupId = e.target.value || null;
-                            const before = s.group_id;
-                            setStudents((rows) =>
-                              rows.map((r) => (r.id === s.id ? { ...r, group_id: groupId } : r)),
-                            );
-                            try {
-                              await updateStudent(s.id, { group_id: groupId });
-                            } catch (err) {
-                              setStudents((rows) =>
-                                rows.map((r) => (r.id === s.id ? { ...r, group_id: before } : r)),
-                              );
-                              setError(err.message);
-                            }
-                          }}
-                        >
-                          <option value="">بدون</option>
-                          {groups.map((g) => (
-                            <option key={g.id} value={g.id}>
-                              {g.name}
-                            </option>
-                          ))}
-                        </Select>
-                      </td>
-                      <td className="p-2 tabular-nums">{Number(t?.answer_points ?? 0)}</td>
-                      <td className="p-2 tabular-nums">{Number(t?.grant_points ?? 0)}</td>
-                      <td className="p-2 font-bold tabular-nums text-brand">
-                        {Number(t?.total_points ?? 0)}
-                      </td>
-                      <td className="p-2">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const next = !s.is_active;
-                            setStudents((rows) =>
-                              rows.map((r) => (r.id === s.id ? { ...r, is_active: next } : r)),
-                            );
-                            try {
-                              await updateStudent(s.id, { is_active: next });
-                            } catch (err) {
-                              setStudents((rows) =>
-                                rows.map((r) =>
-                                  r.id === s.id ? { ...r, is_active: !next } : r,
-                                ),
-                              );
-                              setError(err.message);
-                            }
-                          }}
-                          className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                            s.is_active ? 'bg-ok text-ok-ink' : 'bg-line text-muted'
-                          }`}
-                        >
-                          {s.is_active ? 'نشط' : 'معطّل'}
-                        </button>
-                      </td>
-                      <td className="p-2">
-                        <Button
-                          tone="ghost"
-                          className="min-h-0 px-2 py-1 text-xs"
-                          onClick={async () => {
-                            try {
-                              const res = await resetStudentPin(s.id);
-                              setPinSheet([
-                                { id: s.id, full_name: res.full_name, tempPin: res.tempPin },
-                              ]);
-                              await load();
-                            } catch (err) {
-                              setError(err.message);
-                            }
-                          }}
-                        >
-                          إعادة تعيين الرمز
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Phones get cards. The table needed 680px to lay out, which meant
+                sideways scrolling on every phone — the columns were there but
+                unreadable. */}
+            <ul className="mt-3 space-y-2 lg:hidden">
+              {visible.map((s) => (
+                <li key={s.id} className="rounded-xl border border-line p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold">{s.full_name}</p>
+                      <p className="mt-0.5 text-xs text-muted">{groupName(s.group_id)}</p>
+                    </div>
+                    <p className="shrink-0 text-lg font-bold tabular-nums text-brand">
+                      {Number(totalFor(s.id)?.total_points ?? 0)}
+                    </p>
+                  </div>
+
+                  <p className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-muted">
+                    <span className="rounded-full bg-line px-2 py-0.5">
+                      بنود {Number(totalFor(s.id)?.answer_points ?? 0)}
+                    </span>
+                    <span className="rounded-full bg-line px-2 py-0.5">
+                      تقييم {Number(totalFor(s.id)?.grant_points ?? 0)}
+                    </span>
+                    {s.must_change_password && (
+                      <span className="rounded-full bg-gold-100 px-2 py-0.5 font-bold text-gold-700">
+                        رمز مؤقت
+                      </span>
+                    )}
+                  </p>
+
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <Select
+                      value={s.group_id ?? ''}
+                      aria-label={`مجموعة ${s.full_name}`}
+                      className="min-h-0 w-auto flex-1 py-1.5 text-xs"
+                      onChange={(e) => setGroup(s, e.target.value || null)}
+                    >
+                      <option value="">بدون مجموعة</option>
+                      {groups.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name}
+                        </option>
+                      ))}
+                    </Select>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleActive(s)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                        s.is_active ? 'bg-ok text-ok-ink' : 'bg-line text-muted'
+                      }`}
+                    >
+                      {s.is_active ? 'نشط' : 'معطّل'}
+                    </button>
+
+                    <Button
+                      tone="outline"
+                      className="min-h-0 px-3 py-1.5 text-xs"
+                      onClick={() => resetPin(s)}
+                    >
+                      إعادة تعيين الرمز
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-3 hidden overflow-x-auto lg:block">
+              <table className="w-full text-right text-sm">
+                <thead className="border-b border-line text-xs text-muted">
+                  <tr>
+                    <th className="p-2 font-semibold">الطالب</th>
+                    <th className="p-2 font-semibold">المجموعة</th>
+                    <th className="p-2 font-semibold">نقاط البنود</th>
+                    <th className="p-2 font-semibold">نقاط التقييم</th>
+                    <th className="p-2 font-semibold">الإجمالي</th>
+                    <th className="p-2 font-semibold">الحالة</th>
+                    <th className="p-2 font-semibold">إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((s) => {
+                    const t = totalFor(s.id);
+                    return (
+                      <tr key={s.id} className="border-b border-line/60">
+                        <td className="p-2 font-semibold">
+                          {s.full_name}
+                          {s.must_change_password && (
+                            <span className="ms-2 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-bold text-gold-700">
+                              رمز مؤقت
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          <Select
+                            value={s.group_id ?? ''}
+                            aria-label={`مجموعة ${s.full_name}`}
+                            className="min-h-0 py-1 text-xs"
+                            onChange={(e) => setGroup(s, e.target.value || null)}
+                          >
+                            <option value="">بدون</option>
+                            {groups.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.name}
+                              </option>
+                            ))}
+                          </Select>
+                        </td>
+                        <td className="p-2 tabular-nums">{Number(t?.answer_points ?? 0)}</td>
+                        <td className="p-2 tabular-nums">{Number(t?.grant_points ?? 0)}</td>
+                        <td className="p-2 font-bold tabular-nums text-brand">
+                          {Number(t?.total_points ?? 0)}
+                        </td>
+                        <td className="p-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleActive(s)}
+                            className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                              s.is_active ? 'bg-ok text-ok-ink' : 'bg-line text-muted'
+                            }`}
+                          >
+                            {s.is_active ? 'نشط' : 'معطّل'}
+                          </button>
+                        </td>
+                        <td className="p-2">
+                          <Button
+                            tone="outline"
+                            className="min-h-0 px-3 py-1.5 text-xs"
+                            onClick={() => resetPin(s)}
+                          >
+                            إعادة تعيين الرمز
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Panel>
     </div>

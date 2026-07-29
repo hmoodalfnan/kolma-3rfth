@@ -210,9 +210,9 @@ function ScheduleSettings({ schedule, onChanged }) {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
-          label={`حد السلسلة المتواصلة: ${row.streak_threshold_pct}٪`}
+          label={`حد الستريك 🔥: ${row.streak_threshold_pct}٪`}
           htmlFor="threshold"
-          hint="النسبة التي يجب بلوغها في اليوم ليُحتسب ضمن السلسلة"
+          hint="النسبة التي يجب بلوغها في اليوم ليُحتسب ضمن الستريك"
         >
           <input
             id="threshold"

@@ -153,6 +153,7 @@ describe('database migrations', () => {
       '0010_fix_rls_recursion.sql',
       '0011_staff_must_change_password.sql',
       '0012_create_schedule_rpc.sql',
+      '0013_question_titles.sql',
     ]);
   });
 
