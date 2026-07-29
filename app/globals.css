@@ -36,6 +36,8 @@
   --color-accent-soft: #d6dbec; /* selected row tint, behind normal ink */
   --color-ok: #d9f2e4;
   --color-ok-ink: #146c43;
+  --color-warn-soft: #fbf0cf;
+  --color-warn-ink: #7d6212;
   --color-danger-soft: #fdeaec;
   --color-danger-ink: #b02a37;
 
@@ -60,6 +62,10 @@
     --color-accent-soft: #2a3462;
     --color-ok: #123d2b;
     --color-ok-ink: #7ee0ad;
+    /* Amber over navy: the light-mode cream washes out to grey once it is
+       mixed with the dark panel, taking the warning with it. */
+    --color-warn-soft: #40340f;
+    --color-warn-ink: #f0d489;
     --color-danger-soft: #45161c;
     --color-danger-ink: #ffb3bb;
   }
@@ -80,6 +86,8 @@
       --color-accent-soft: #2a3462;
       --color-ok: #123d2b;
       --color-ok-ink: #7ee0ad;
+      --color-warn-soft: #40340f;
+      --color-warn-ink: #f0d489;
       --color-danger-soft: #45161c;
       --color-danger-ink: #ffb3bb;
     }

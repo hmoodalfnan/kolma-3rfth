@@ -214,7 +214,7 @@ export function ImportWizard({ groups, scheduleName, onImport, onCancel }) {
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2 text-xs font-bold">
             <span className="rounded-full bg-ok px-3 py-1 text-ok-ink">جاهز {ready.length}</span>
-            <span className="rounded-full bg-gold-100 px-3 py-1 text-gold-700">
+            <span className="rounded-full bg-warn-soft px-3 py-1 text-warn-ink">
               تحذير {warned.length}
             </span>
             <span className="rounded-full bg-danger-soft px-3 py-1 text-danger-ink">
@@ -259,9 +259,11 @@ export function ImportWizard({ groups, scheduleName, onImport, onCancel }) {
   );
 }
 
+// Full opacity, not a tint: mixing either soft colour into the dark panel lands
+// on the same murky grey, which is how a warning stopped looking like one.
 const ROW_TONES = {
-  danger: 'border-rose-500/40 bg-danger-soft/40',
-  warn: 'border-gold-500/40 bg-gold-100/40',
+  danger: 'border-rose-500/50 bg-danger-soft',
+  warn: 'border-gold-500/50 bg-warn-soft',
   ok: 'border-line bg-panel',
 };
 
@@ -326,7 +328,7 @@ function DraftRow({ row, groups, open, onToggle, onChange, onRemove }) {
             </li>
           ))}
           {row.warnings.map((message) => (
-            <li key={message} className="font-semibold text-gold-700">
+            <li key={message} className="font-semibold text-warn-ink">
               ⚠️ {message}
             </li>
           ))}
