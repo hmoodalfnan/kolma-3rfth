@@ -77,11 +77,25 @@ export function ManageShell({ children }) {
       </div>
 
       {groups.map((group) => (
-        <div key={group.key}>
+        <div
+          key={group.key}
+          // The trip group is a context, not a list of links: everything inside
+          // it acts on the trip named at the top. Boxing it makes that visible
+          // instead of leaving the picker looking like one more control.
+          className={
+            group.picker ? 'rounded-2xl border border-accent/40 bg-accent-soft/40 p-2' : undefined
+          }
+        >
           <p className="px-2 pb-1.5 text-[11px] font-bold tracking-wide text-muted">{group.title}</p>
 
           {group.picker && (
             <div className="px-2 pb-2">
+              <p className="mb-1 flex items-center gap-1.5 text-sm font-bold text-brand">
+                <span aria-hidden="true">▸</span>
+                <span className="min-w-0 truncate">
+                  رحلة: {schedules.find((s) => s.id === currentId)?.name ?? '—'}
+                </span>
+              </p>
               <Select
                 aria-label="اختر الرحلة"
                 value={currentId ?? ''}
@@ -90,11 +104,14 @@ export function ManageShell({ children }) {
               >
                 {schedules.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name}
+                    رحلة: {s.name}
                     {s.status === 'archived' ? ' (مؤرشفة)' : ''}
                   </option>
                 ))}
               </Select>
+              <p className="mt-1 px-0.5 text-[11px] text-muted">
+                كل ما تحته يخصّ هذه الرحلة وحدها.
+              </p>
             </div>
           )}
 

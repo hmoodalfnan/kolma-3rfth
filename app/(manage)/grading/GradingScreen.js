@@ -161,7 +161,7 @@ export function GradingScreen() {
                         }
                       }}
                     >
-                      تراجع
+                      حذف
                     </Button>
                   )}
                 </span>

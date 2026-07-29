@@ -117,7 +117,7 @@ async function deleteHandler(request) {
   if (!(await staffsSchedule(scoped, event.schedule_id))) return json({ error: 'غير مصرح' }, 403);
 
   const { error } = await scoped.from('point_events').delete().eq('id', eventId);
-  if (error) return json({ error: 'تعذّر التراجع' }, 400);
+  if (error) return json({ error: 'تعذّر حذف النقاط' }, 400);
 
   await writeAudit(db, {
     actorLabel: profile.username,

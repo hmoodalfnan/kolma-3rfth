@@ -15,13 +15,13 @@ import {
   listGroups,
   createGroup,
   updateGroup,
-  rotateGroupSlug,
   deleteGroup,
   post,
 } from '@/lib/manage/api';
 import { todayInRiyadh } from '@/lib/schedule-time/day';
 import { JoinLinkRow } from './JoinLinkRow';
 import { ScheduleStaffPanel } from './ScheduleStaffPanel';
+import { ScheduleRoster } from './ScheduleRoster';
 import { useTransientError } from '@/lib/ui/useTransientError';
 
 export function SchedulesScreen() {
@@ -97,6 +97,7 @@ export function SchedulesScreen() {
       {current && <ScheduleSettings key={current.id} schedule={current} onChanged={reload} />}
       {current && <ScheduleStaffPanel key={`st-${current.id}`} schedule={current} />}
       {current && <GroupsPanel key={`g-${current.id}`} schedule={current} />}
+      {current && <ScheduleRoster key={`r-${current.id}`} schedule={current} />}
     </div>
   );
 }
@@ -299,7 +300,7 @@ function ScheduleSettings({ schedule, onChanged }) {
 
       <div className="mt-4 border-t border-line pt-3">
         <JoinLinkRow
-          label="رابط الرحلة (كل الطلاب)"
+          label="رابط الرحلة — يصلح لكل الطلاب"
           slug={row.slug}
           onRotate={async () => {
             const updated = await rotateScheduleSlug(schedule.id);
@@ -408,16 +409,6 @@ function GroupsPanel({ schedule }) {
                 </Button>
               </div>
 
-              <div className="mt-2">
-                <JoinLinkRow
-                  label="رابط هذه المجموعة"
-                  slug={g.join_slug}
-                  onRotate={async () => {
-                    const updated = await rotateGroupSlug(g.id);
-                    setGroups((rows) => rows.map((r) => (r.id === g.id ? updated : r)));
-                  }}
-                />
-              </div>
             </li>
           ))}
         </ul>
