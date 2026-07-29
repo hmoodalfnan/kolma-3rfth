@@ -156,6 +156,7 @@ describe('database migrations', () => {
       '0013_question_titles.sql',
       '0014_schedule_staff_assignment.sql',
       '0015_manager_trip_control.sql',
+      '0016_question_sections.sql',
     ]);
   });
 

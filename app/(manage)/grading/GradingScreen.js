@@ -20,7 +20,8 @@ import {
 } from '@/lib/manage/api';
 import { useTransientError } from '@/lib/ui/useTransientError';
 
-const QUICK = [1, 5, 10, 20];
+// Symmetric, so a deduction is the same gesture as an award.
+const QUICK = [1, 3, 5, -1, -3, -5];
 
 export function GradingScreen() {
   const { current } = useSchedule();
@@ -73,13 +74,20 @@ export function GradingScreen() {
     <div className="space-y-4">
       <ErrorText>{error}</ErrorText>
 
+      <CriteriaPanel
+        scheduleId={current.id}
+        criteria={criteria}
+        onChanged={load}
+        onError={setError}
+      />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <GrantForm
           title="تقييم طالب"
           criteria={criteria}
           targets={students.map((s) => ({
             id: s.id,
-            label: `${s.full_name} — ${groups.find((g) => g.id === s.group_id)?.name ?? 'بدون مجموعة'}`,
+            label: `${s.full_name} — مجموعة: ${groups.find((g) => g.id === s.group_id)?.name ?? 'بدون مجموعة'}`,
           }))}
           emptyLabel="لا يوجد طلاب نشطون."
           onSubmit={(criterionId, points, note, targetId) =>
@@ -92,7 +100,7 @@ export function GradingScreen() {
           criteria={criteria}
           targets={groups.map((g) => ({
             id: g.id,
-            label: `${g.name} (${students.filter((s) => s.group_id === g.id).length} طالب)`,
+            label: `مجموعة: ${g.name} (${students.filter((s) => s.group_id === g.id).length} طالب)`,
           }))}
           emptyLabel="لا توجد مجموعات."
           showApplyToMembers
@@ -107,13 +115,6 @@ export function GradingScreen() {
           }
         />
       </div>
-
-      <CriteriaPanel
-        scheduleId={current.id}
-        criteria={criteria}
-        onChanged={load}
-        onError={setError}
-      />
 
       <Panel title="آخر العمليات">
         {grants.length === 0 ? (
@@ -207,9 +208,15 @@ function GrantForm({
     );
   }
 
-  const run = async (sign) => {
+  const run = async () => {
+    const value = Number(points);
+    if (!value) return;
+
     setBusy(true);
-    await onSubmit(criterionId, sign * Math.abs(Number(points)), note, targetId, applyToMembers);
+    // The sign is carried by the value the user picked, so a criterion that
+    // forbids deductions clamps rather than silently flipping it.
+    const signed = criterion?.allow_negative ? value : Math.abs(value);
+    await onSubmit(criterionId, signed, note, targetId, applyToMembers);
     setNote('');
     setBusy(false);
   };
@@ -246,28 +253,52 @@ function GrantForm({
           </Select>
         </Field>
 
-        <Field label="النقاط" htmlFor={`${title}-points`}>
-          <div className="flex flex-wrap gap-2">
+        {/* The sign lives on the number, not on a pair of submit buttons. Two
+            buttons meant choosing an amount and then choosing a direction, and
+            the direction was the easier of the two to get wrong. */}
+        <Field
+          label="النقاط"
+          htmlFor={`${title}-points`}
+          hint={
+            criterion?.allow_negative
+              ? 'اختر قيمة موجبة للزيادة أو سالبة للخصم.'
+              : 'هذا البند لا يسمح بالخصم.'
+          }
+        >
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK.map((n) => {
+              const disabled = n < 0 && !criterion?.allow_negative;
+              const on = Number(points) === n;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setPoints(n)}
+                  className={`min-w-14 rounded-lg px-3 py-2 text-sm font-bold tabular-nums transition disabled:opacity-30 ${
+                    on
+                      ? n < 0
+                        ? 'bg-rose-600 text-white'
+                        : 'bg-accent text-accent-ink'
+                      : 'chip'
+                  }`}
+                  dir="ltr"
+                >
+                  {n > 0 ? `+${n}` : n}
+                </button>
+              );
+            })}
+
             <Input
               id={`${title}-points`}
               type="number"
-              min={1}
               value={points}
               onChange={(e) => setPoints(e.target.value)}
-              className="w-28"
+              aria-label="قيمة أخرى"
+              placeholder="أخرى"
+              className="w-24"
+              dir="ltr"
             />
-            {QUICK.map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setPoints(n)}
-                className={`rounded-lg px-3 text-sm font-bold ${
-                  Number(points) === n ? 'bg-accent text-accent-ink' : 'bg-chip text-brand'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
           </div>
         </Field>
 
@@ -294,16 +325,16 @@ function GrantForm({
           </>
         )}
 
-        <div className="flex gap-2">
-          <Button loading={busy} onClick={() => run(1)}>
-            زيادة
-          </Button>
-          {criterion?.allow_negative && (
-            <Button tone="danger" loading={busy} onClick={() => run(-1)}>
-              خصم
-            </Button>
-          )}
-        </div>
+        <Button
+          loading={busy}
+          disabled={!Number(points)}
+          tone={Number(points) < 0 ? 'danger' : 'primary'}
+          onClick={run}
+        >
+          {Number(points) < 0
+            ? `خصم ${Math.abs(Number(points))} نقطة`
+            : `منح ${Number(points) || 0} نقطة`}
+        </Button>
       </div>
     </Panel>
   );

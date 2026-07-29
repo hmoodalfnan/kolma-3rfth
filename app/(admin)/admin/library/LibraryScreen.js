@@ -72,6 +72,7 @@ export function LibraryScreen() {
             <QuestionEditor
               key={editing === 'new' ? 'new' : editing.id}
               question={editing === 'new' ? undefined : editing}
+              sections={[...new Set((rows ?? []).map((q) => q.section).filter(Boolean))]}
               onCancel={() => setEditing(null)}
               onSave={async (draft) => {
                 const payload = {

@@ -95,6 +95,7 @@ export function QuestionsScreen() {
               // the editor never opens holding the previous question's draft.
               key={editing === 'new' ? 'new' : editing.id}
               question={editing === 'new' ? undefined : editing}
+              sections={[...new Set((questions ?? []).map((q) => q.section).filter(Boolean))]}
               onCancel={() => setEditing(null)}
               onSave={async (draft) => {
                 if (editing === 'new') {

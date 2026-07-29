@@ -23,6 +23,8 @@ Paste one file, press Run, wait for `Success. No rows returned`, then move to th
     trips, with the trip's owner removable only by a super admin
 15. `migrations/0015_manager_trip_control.sql` — lets managers create trips, enforces
     unique trip names, and repairs trips that had no staff at all
+16. `migrations/0016_question_sections.sql` — drops the قيام وضحى heading and renames
+    الأذكار to أذكار الصباح والمساء
 
 ## Keeping people signed in
 

@@ -10,6 +10,8 @@ import { parseConfig } from '@/lib/questions/config-schema';
 import { WEEKDAY_LABELS } from '@/lib/schedule-time/day';
 import { CONFIG_EDITORS } from './ConfigEditors';
 
+const NEW_SECTION = '__new__';
+
 const emptyQuestion = () => ({
   section: '',
   title: '',
@@ -23,8 +25,20 @@ const emptyQuestion = () => ({
   is_required: false,
 });
 
-export function QuestionEditor({ question, onSave, onCancel, showSection = true }) {
+export function QuestionEditor({
+  question,
+  onSave,
+  onCancel,
+  showSection = true,
+  sections = [],
+}) {
   const [draft, setDraft] = useState({ ...emptyQuestion(), ...question });
+  // An existing question whose section is not in the list is being edited after
+  // that section was renamed elsewhere; treat it as a new one so the value is
+  // not silently dropped.
+  const [newSection, setNewSection] = useState(
+    Boolean(question?.section) && !sections.includes(question.section),
+  );
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -90,12 +104,50 @@ export function QuestionEditor({ question, onSave, onCancel, showSection = true 
         </Field>
 
         {showSection && (
-          <Field label="القسم" htmlFor="qsection" hint="لتجميع البنود، مثل: السنن الرواتب">
-            <Input
+          <Field
+            label="القسم"
+            htmlFor="qsection"
+            hint={
+              newSection
+                ? 'سيُنشأ قسم جديد بهذا الاسم.'
+                : 'اختر قسماً موجوداً، أو «قسم جديد…» لإنشاء واحد.'
+            }
+          >
+            {/* Typing the section by hand produced near-duplicates that split a
+                group in two — "الأذكار" and "الاذكار" are different strings and
+                the same intent. Existing sections are offered first. */}
+            <Select
               id="qsection"
-              value={draft.section}
-              onChange={(e) => setDraft({ ...draft, section: e.target.value })}
-            />
+              value={newSection ? NEW_SECTION : draft.section}
+              onChange={(e) => {
+                if (e.target.value === NEW_SECTION) {
+                  setNewSection(true);
+                  setDraft({ ...draft, section: '' });
+                } else {
+                  setNewSection(false);
+                  setDraft({ ...draft, section: e.target.value });
+                }
+              }}
+            >
+              <option value="">بدون قسم</option>
+              {sections.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+              <option value={NEW_SECTION}>قسم جديد…</option>
+            </Select>
+
+            {newSection && (
+              <Input
+                aria-label="اسم القسم الجديد"
+                placeholder="اسم القسم الجديد"
+                value={draft.section}
+                onChange={(e) => setDraft({ ...draft, section: e.target.value })}
+                className="mt-2"
+                autoFocus
+              />
+            )}
           </Field>
         )}
 

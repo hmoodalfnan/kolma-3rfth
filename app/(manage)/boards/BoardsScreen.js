@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Select } from '@/components/ui/Field';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
 import { BoardTable, RankBadge } from '@/components/boards/BoardTable';
+import { PerQuestionBoard } from './PerQuestionBoard';
 import { StudentBreakdown } from '@/components/boards/StudentBreakdown';
 import { getBrowserClient } from '@/lib/supabase/browser';
 import { useSchedule } from '@/lib/manage/useSchedule';
@@ -130,15 +131,18 @@ function OverallBoard({ schedule, onError }) {
         ]}
       />
 
-      <StudentBreakdown student={open} scheduleId={schedule.id} onClose={() => setOpen(null)} />
+      <StudentBreakdown student={open} schedule={schedule} onClose={() => setOpen(null)} />
     </Panel>
   );
 }
+
+const UNGROUPED = '__ungrouped__';
 
 function GroupsBoard({ schedule, onError }) {
   const [rows, setRows] = useState(null);
   const [students, setStudents] = useState([]);
   const [open, setOpen] = useState(null);
+  const [detail, setDetail] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -163,17 +167,42 @@ function GroupsBoard({ schedule, onError }) {
     };
   }, [schedule.id, onError]);
 
-  const best = rows?.[0]?.total_points ? Number(rows[0].total_points) : 1;
+  // Students with no group are invisible to v_group_totals, which groups by
+  // group_id — so a whole bucket of people simply did not appear anywhere on
+  // this screen. They are folded in as a pseudo-group, ranked alongside the
+  // real ones but marked as not being one.
+  const withUngrouped = useMemo(() => {
+    if (!rows) return null;
+
+    const loose = students.filter((s) => !s.group_id);
+    if (loose.length === 0) return rows;
+
+    const total = loose.reduce((sum, s) => sum + Number(s.total_points), 0);
+    const bucket = {
+      group_id: UNGROUPED,
+      group_name: 'بدون مجموعة',
+      member_count: loose.length,
+      total_points: total,
+      group_points: 0,
+      avg_points: Math.round((total / loose.length) * 10) / 10,
+    };
+
+    return rankRows(
+      [...rows, bucket].sort((a, b) => Number(b.total_points) - Number(a.total_points)),
+    );
+  }, [rows, students]);
+
+  const best = withUngrouped?.[0]?.total_points ? Number(withUngrouped[0].total_points) : 1;
 
   return (
     <Panel title="ترتيب المجموعات">
-      {rows === null ? (
+      {withUngrouped === null ? (
         <BoardTable loading rows={[]} columns={[]} />
-      ) : rows.length === 0 ? (
-        <EmptyState>لا توجد مجموعات.</EmptyState>
+      ) : withUngrouped.length === 0 ? (
+        <EmptyState>لا توجد مجموعات ولا طلاب.</EmptyState>
       ) : (
         <ul className="space-y-2">
-          {rows.map((g) => (
+          {withUngrouped.map((g) => (
             <li key={g.group_id} className="rounded-xl border border-line p-3">
               <button
                 type="button"
@@ -182,7 +211,14 @@ function GroupsBoard({ schedule, onError }) {
               >
                 <RankBadge rank={g.rank} />
                 <span className="min-w-0 flex-1">
-                  <span className="block font-semibold">{g.group_name}</span>
+                  <span className="block font-semibold">
+                    {g.group_id === UNGROUPED ? g.group_name : `مجموعة: ${g.group_name}`}
+                    {g.group_id === UNGROUPED && (
+                      <span className="ms-2 rounded-full bg-line px-2 py-0.5 text-[10px] font-bold text-muted">
+                        ليست مجموعة
+                      </span>
+                    )}
+                  </span>
                   <span className="block text-xs text-muted">
                     {g.member_count} طالب · معدل {Number(g.avg_points)} · نقاط جماعية{' '}
                     {Number(g.group_points)}
@@ -202,11 +238,27 @@ function GroupsBoard({ schedule, onError }) {
               {open === g.group_id && (
                 <ul className="mt-3 space-y-1 border-t border-line pt-2 text-sm">
                   {students
-                    .filter((s) => s.group_id === g.group_id)
+                    .filter((s) =>
+                      g.group_id === UNGROUPED ? !s.group_id : s.group_id === g.group_id,
+                    )
+                    .sort((a, b) => Number(b.total_points) - Number(a.total_points))
                     .map((s) => (
-                      <li key={s.student_id} className="flex justify-between gap-2">
-                        <span>{s.full_name}</span>
-                        <span className="font-semibold tabular-nums">{Number(s.total_points)}</span>
+                      <li key={s.student_id}>
+                        <button
+                          type="button"
+                          onClick={() => setDetail(s)}
+                          className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-right hover:bg-chip"
+                        >
+                          <span className="min-w-0 truncate">{s.full_name}</span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span className="font-semibold tabular-nums">
+                              {Number(s.total_points)}
+                            </span>
+                            <span aria-hidden="true" className="text-muted">
+                              ‹
+                            </span>
+                          </span>
+                        </button>
                       </li>
                     ))}
                 </ul>
@@ -215,100 +267,8 @@ function GroupsBoard({ schedule, onError }) {
           ))}
         </ul>
       )}
-    </Panel>
-  );
-}
 
-function PerQuestionBoard({ schedule, onError }) {
-  const [questions, setQuestions] = useState(null);
-  const [questionId, setQuestionId] = useState('');
-  const [rows, setRows] = useState(null);
-  const [students, setStudents] = useState([]);
-
-  useEffect(() => {
-    let alive = true;
-    Promise.all([
-      listQuestions(schedule.id),
-      fetchStudentTotals(getBrowserClient(), { scheduleId: schedule.id }),
-    ])
-      .then(([q, s]) => {
-        if (!alive) return;
-        setQuestions(q);
-        setStudents(s);
-        if (q[0]) setQuestionId(q[0].id);
-      })
-      .catch((err) => alive && onError(err.message));
-    return () => {
-      alive = false;
-    };
-  }, [schedule.id, onError]);
-
-  const load = useCallback(async () => {
-    if (!questionId) return;
-    setRows(null);
-    try {
-      setRows(
-        await fetchQuestionLeaders(getBrowserClient(), { scheduleId: schedule.id, questionId, limit: 100 }),
-      );
-    } catch (err) {
-      onError(err.message);
-      setRows([]);
-    }
-  }, [schedule.id, questionId, onError]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const nameOf = useMemo(() => {
-    const map = new Map(students.map((s) => [s.student_id, s]));
-    return (id) => map.get(id);
-  }, [students]);
-
-  if (questions === null) return <BoardTable loading rows={[]} columns={[]} />;
-  if (questions.length === 0) return <EmptyState>لا توجد بنود في هذه الرحلة.</EmptyState>;
-
-  const ranked = rankRows(rows ?? [], 'times_completed');
-
-  return (
-    <Panel title="الأوائل في كل بند">
-      <Select
-        aria-label="اختر البند"
-        value={questionId}
-        onChange={(e) => setQuestionId(e.target.value)}
-        className="mb-3 max-w-md"
-      >
-        {questions.map((q) => (
-          <option key={q.id} value={q.id}>
-            {q.title}
-          </option>
-        ))}
-      </Select>
-
-      <BoardTable
-        loading={rows === null}
-        rows={ranked}
-        empty="لا توجد إجابات لهذا البند بعد."
-        columns={[
-          { key: 'rank', label: '#', render: (r) => <RankBadge rank={r.rank} /> },
-          {
-            key: 'student',
-            label: 'الطالب',
-            render: (r) => (
-              <span className="font-semibold">{nameOf(r.student_id)?.full_name ?? '—'}</span>
-            ),
-          },
-          { key: 'group', label: 'المجموعة', render: (r) => nameOf(r.student_id)?.group_name ?? '—' },
-          { key: 'times_completed', label: 'مرات الالتزام', render: (r) => Number(r.times_completed) },
-          {
-            key: 'points',
-            label: 'النقاط',
-            render: (r) => (
-              <span className="font-bold tabular-nums text-brand">{Number(r.points)}</span>
-            ),
-          },
-        ]}
-      />
+      <StudentBreakdown student={detail} schedule={schedule} onClose={() => setDetail(null)} />
     </Panel>
   );
 }
