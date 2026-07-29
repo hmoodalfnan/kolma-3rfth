@@ -310,9 +310,11 @@ function DraftRow({ row, groups, open, onToggle, onChange, onRemove }) {
         >
           {open ? 'تم' : row.errors.length ? 'إصلاح' : 'تعديل'}
         </Button>
+        {/* Outline, not ghost: a bare-text control next to a bordered one reads
+            as a caption rather than something you can press. */}
         <Button
-          tone="ghost"
-          className="min-h-0 shrink-0 px-2 py-1.5 text-xs"
+          tone="outline"
+          className="min-h-0 shrink-0 px-3 py-1.5 text-xs text-danger-ink"
           onClick={onRemove}
           aria-label={`حذف ${row.full_name || `الصف ${row.rowNumber}`} من الاستيراد`}
         >
