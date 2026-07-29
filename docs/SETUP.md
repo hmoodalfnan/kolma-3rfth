@@ -77,9 +77,15 @@ Open <http://localhost:3000/login> and sign in as `mohammed`.
 5. **البنود** → **نسخ من المكتبة** to pull in the standard items, then edit them or add
    your own. Every question type supports custom points, and choice options can carry
    negative points.
-6. **الطلاب** → **استيراد Excel** with a two-column file (`الاسم`, optionally `الرمز`),
-   choosing the group in the wizard. **Print the PIN sheet immediately** — those temp PINs
-   are never shown again.
+6. **الطلاب** → **استيراد Excel**. Download the template first: it carries the columns
+   (`الاسم`, optionally `المجموعة`, `الجوال`, `الرمز`) and a dropdown on `المجموعة` listing
+   the groups you added in step 4, so each student's group is set in the file itself. Its
+   guidance sits above the table and is never imported, so there is nothing to delete.
+   After uploading you get a review screen: every name is listed, broken rows first
+   (empty name, a PIN that is not 6 digits, a phone that is not 8 digits, an unknown
+   group), and a one-word name is flagged as a warning you can accept. Fix or delete rows
+   in place — the good ones import either way, so a bad row never costs you the upload.
+   **Print the PIN sheet immediately** — those temp PINs are never shown again.
 7. Share the join link (**الرحلات → رابط الرحلة**). Students pick their name, enter the
    temp PIN, and are forced to choose their own 6-digit PIN.
 
