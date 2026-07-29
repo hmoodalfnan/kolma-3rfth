@@ -198,6 +198,21 @@ export function GlobalBoard() {
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={toggleSort}
+          mobileCard={(row) => (
+            <div className="flex items-center gap-3 rounded-xl border border-line p-3">
+              <RankBadge rank={row.rank} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold">{row.full_name}</span>
+                <span className="block truncate text-xs text-muted">
+                  {row.group_name ?? 'بدون مجموعة'} · بنود {Number(row.answer_points ?? 0)} · تقييم{' '}
+                  {Number(row.grant_points ?? 0)}
+                </span>
+              </span>
+              <span className="shrink-0 text-lg font-bold tabular-nums text-brand" dir="ltr">
+                {Number(row.total_points)}
+              </span>
+            </div>
+          )}
           columns={[
             { key: 'rank', label: '#', sortable: false, render: (r) => <RankBadge rank={r.rank} /> },
             {

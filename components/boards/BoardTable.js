@@ -19,14 +19,40 @@ export function RankBadge({ rank }) {
 /**
  * Sortable table shared by every leaderboard.
  * `columns` is `[{ key, label, align, render, sortable }]`.
+ *
+ * `mobileCard(row, index)` is what a row looks like below 1024px. A leaderboard
+ * is seven columns wide, which on a phone meant sideways scrolling past the
+ * name to reach the score — the two things you actually came to compare. Where
+ * a caller supplies it, phones get cards and the table starts at lg. Callers
+ * that do not are left on the old horizontal scroll.
  */
-export function BoardTable({ columns, rows, loading, sortKey, sortDir = 'desc', onSort, empty }) {
+export function BoardTable({
+  columns,
+  rows,
+  loading,
+  sortKey,
+  sortDir = 'desc',
+  onSort,
+  empty,
+  mobileCard,
+}) {
   if (loading) return <SkeletonList rows={10} />;
   if (!rows || rows.length === 0) return <EmptyState>{empty ?? 'لا توجد نتائج.'}</EmptyState>;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] text-right text-sm">
+    <>
+      {mobileCard && (
+        <ul className="space-y-2 lg:hidden">
+          {rows.map((row, index) => (
+            <li key={row.id ?? row.student_id ?? row.group_id ?? index}>
+              {mobileCard(row, index)}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className={mobileCard ? 'hidden overflow-x-auto lg:block' : 'overflow-x-auto'}>
+      <table className={`w-full text-right text-sm ${mobileCard ? '' : 'min-w-[640px]'}`}>
         <thead className="border-b border-line text-xs text-muted">
           <tr>
             {columns.map((col) => (
@@ -62,6 +88,7 @@ export function BoardTable({ columns, rows, loading, sortKey, sortDir = 'desc', 
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }

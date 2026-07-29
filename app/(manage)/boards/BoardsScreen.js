@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Select } from '@/components/ui/Field';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
 import { BoardTable, RankBadge } from '@/components/boards/BoardTable';
+import { StudentBreakdown } from '@/components/boards/StudentBreakdown';
 import { getBrowserClient } from '@/lib/supabase/browser';
 import { useSchedule } from '@/lib/manage/useSchedule';
 import { fetchStudentTotals, fetchGroupTotals, fetchQuestionLeaders, rankRows } from '@/lib/boards/queries';
@@ -26,7 +27,7 @@ export function BoardsScreen() {
     <div className="space-y-4">
       <ErrorText>{error}</ErrorText>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -51,6 +52,7 @@ export function BoardsScreen() {
 
 function OverallBoard({ schedule, onError }) {
   const [rows, setRows] = useState(null);
+  const [open, setOpen] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -68,16 +70,53 @@ function OverallBoard({ schedule, onError }) {
     };
   }, [schedule.id, onError]);
 
+  const openRow = (row) => (
+    <button
+      type="button"
+      onClick={() => setOpen(row)}
+      className="flex w-full items-center gap-3 rounded-xl border border-line p-3 text-right"
+    >
+      <RankBadge rank={row.rank} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-semibold">{row.full_name}</span>
+        <span className="block text-xs text-muted">
+          {row.group_name ?? 'بدون مجموعة'} · بنود {Number(row.answer_points)} · تقييم{' '}
+          {Number(row.grant_points)}
+        </span>
+      </span>
+      <span className="shrink-0 text-lg font-bold tabular-nums text-brand" dir="ltr">
+        {Number(row.total_points)}
+      </span>
+      <span aria-hidden="true" className="shrink-0 text-muted">
+        ‹
+      </span>
+    </button>
+  );
+
   return (
     <Panel title={`الترتيب العام — ${schedule.name}`}>
+      <p className="mb-2 text-xs text-muted">اضغط على اسم الطالب لعرض تفاصيل نقاطه.</p>
+
       <BoardTable
         loading={rows === null}
         rows={rows ?? []}
+        mobileCard={openRow}
         columns={[
           { key: 'rank', label: '#', render: (r) => <RankBadge rank={r.rank} /> },
-          { key: 'full_name', label: 'الطالب', render: (r) => <span className="font-semibold">{r.full_name}</span> },
+          {
+            key: 'full_name',
+            label: 'الطالب',
+            render: (r) => (
+              <button
+                type="button"
+                onClick={() => setOpen(r)}
+                className="font-semibold underline decoration-dotted underline-offset-4 hover:text-brand"
+              >
+                {r.full_name}
+              </button>
+            ),
+          },
           { key: 'group_name', label: 'المجموعة', render: (r) => r.group_name ?? '—' },
-          { key: 'schedule_name', label: 'الرحلة' },
           { key: 'answer_points', label: 'نقاط البنود', render: (r) => Number(r.answer_points) },
           { key: 'grant_points', label: 'نقاط التقييم', render: (r) => Number(r.grant_points) },
           {
@@ -89,6 +128,8 @@ function OverallBoard({ schedule, onError }) {
           },
         ]}
       />
+
+      <StudentBreakdown student={open} scheduleId={schedule.id} onClose={() => setOpen(null)} />
     </Panel>
   );
 }

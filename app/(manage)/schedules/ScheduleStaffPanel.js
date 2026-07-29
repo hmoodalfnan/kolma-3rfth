@@ -93,9 +93,10 @@ export function ScheduleStaffPanel({ schedule }) {
       next.delete(user.id);
       setAssigned(next);
 
-      // Removing yourself means this trip is about to vanish from your list,
-      // so reload rather than leaving a screen you can no longer read.
-      if (isSelf) window.location.href = '/schedules';
+      // Removing yourself means this trip is about to vanish from your list, so
+      // reload the whole thing rather than leaving a screen whose data you can
+      // no longer read. A full navigation also clears the cached selection.
+      if (isSelf) window.location.assign('/schedules');
     } catch (err) {
       setError(err.message);
     }
