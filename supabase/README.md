@@ -16,6 +16,8 @@ Paste one file, press Run, wait for `Success. No rows returned`, then move to th
     policy for relation "students"`
 11. `migrations/0011_staff_must_change_password.sql` — forces a password change after
     a generated temporary password
+12. `migrations/0012_create_schedule_rpc.sql` — lets a manager create a trip and reach
+    it afterwards, and repairs trips whose manager was left without access
 
 Migrations 9 and 10 are safe to run on a project that is already live, and
 migration 10 is safe to re-run. If sign-in reports `Could not find the table
