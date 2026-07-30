@@ -7,7 +7,24 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
   const refs = useRef([]);
   const digits = value.padEnd(length, ' ').slice(0, length).split('');
 
+  /**
+   * The box this component itself just moved to, so the guard below can tell a
+   * move it made from a tap somewhere unexpected.
+   *
+   * Advancing happens synchronously inside the change handler, before React has
+   * re-rendered with the digit just typed. Without this, the guard asked "may
+   * this box be focused?" of a state where that digit did not exist yet,
+   * decided no, and sent focus straight back — so the caret never left the
+   * first box and no code longer than one digit could be entered at all.
+   */
+  const wanted = useRef(null);
+
   const emit = (next) => onChange(next.join('').trimEnd());
+
+  function focusBox(index) {
+    wanted.current = index;
+    refs.current[index]?.focus();
+  }
 
   /** Index of the first blank box, or the last box when the code is full. */
   const firstEmpty = () => {
@@ -43,7 +60,7 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
     const next = [...digits];
     next[target] = digit;
     emit(next);
-    if (target < length - 1) refs.current[target + 1]?.focus();
+    if (target < length - 1) focusBox(target + 1);
   }
 
   function handleKeyDown(index, event) {
@@ -55,7 +72,7 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
       next[index] = ' ';
     } else if (index > 0) {
       next[index - 1] = ' ';
-      refs.current[index - 1]?.focus();
+      focusBox(index - 1);
     }
     emit(next);
   }
@@ -67,7 +84,7 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
     if (!pasted) return;
     event.preventDefault();
     emit(pasted.padEnd(length, ' ').split(''));
-    refs.current[Math.min(pasted.length, length - 1)]?.focus();
+    focusBox(Math.min(pasted.length, length - 1));
   }
 
   /**
@@ -78,9 +95,11 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
    * reachable, so a digit already typed can still be corrected.
    */
   function handleFocus(index, event) {
-    const target = firstEmpty();
-    if (index > target) {
-      refs.current[target]?.focus();
+    const invited = wanted.current === index;
+    wanted.current = null;
+
+    if (!invited && index > firstEmpty()) {
+      focusBox(firstEmpty());
       return;
     }
     // A box that already holds a digit is selected on arrival, so the next
@@ -97,7 +116,7 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
     const target = firstEmpty();
     if (index <= target) return;
     event.preventDefault();
-    refs.current[target]?.focus();
+    focusBox(target);
   }
 
   const nextBox = firstEmpty();
@@ -128,9 +147,11 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
             onFocus={(e) => handleFocus(index, e)}
             onPointerDown={(e) => handlePointerDown(index, e)}
             onPaste={handlePaste}
-            className={`size-12 rounded-xl border border-line bg-panel text-center text-xl font-bold text-ink outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/25 disabled:opacity-60 ${
-              reachable ? '' : 'opacity-50'
-            }`}
+            // Every box looks the same. Fading the ones that cannot be typed in
+            // yet washed a pale border out to nothing on a white screen, and the
+            // six boxes read as one — so a code six digits long looked like a
+            // field for a single number.
+            className="size-12 rounded-xl border border-line bg-panel text-center text-xl font-bold text-ink outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/25 disabled:opacity-60"
           />
         );
       })}

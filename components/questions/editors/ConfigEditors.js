@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/Button';
-import { Field, Input, Select } from '@/components/ui/Field';
+import { Field, Input, NumberInput, Select } from '@/components/ui/Field';
 import { PRAYERS, PRAYER_LABELS } from '@/lib/questions/types';
 
 export function PerPrayerConfig({ config, onChange }) {
@@ -46,9 +46,8 @@ export function PerPrayerConfig({ config, onChange }) {
       </fieldset>
 
       <Field label="النقاط لكل صلاة" htmlFor="ppp">
-        <Input
+        <NumberInput
           id="ppp"
-          type="number"
           value={config.points_per_prayer ?? 1}
           onChange={(e) => onChange({ ...config, points_per_prayer: Number(e.target.value) })}
         />
@@ -84,9 +83,9 @@ export function ChoiceConfig({ config, onChange }) {
             }
             className="min-w-40 flex-1"
           />
-          <Input
+          <NumberInput
             aria-label={`نقاط الخيار ${index + 1}`}
-            type="number"
+            signed
             value={opt.points}
             onChange={(e) =>
               patch(options.map((o, i) => (i === index ? { ...o, points: Number(e.target.value) } : o)))
@@ -144,18 +143,16 @@ export function CounterConfig({ config, onChange }) {
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       <Field label="النقاط لكل وحدة" htmlFor="ppu">
-        <Input
+        <NumberInput
           id="ppu"
-          type="number"
           value={config.points_per_unit ?? 1}
           onChange={(e) => onChange({ ...config, points_per_unit: Number(e.target.value) })}
         />
       </Field>
       <Field label="الحد الأقصى" htmlFor="cmax">
-        <Input
+        <NumberInput
           id="cmax"
-          type="number"
-          min={1}
+          decimal={false}
           value={config.max ?? 1}
           onChange={(e) => onChange({ ...config, max: Number(e.target.value) })}
         />
@@ -188,9 +185,8 @@ export function RatingConfig({ config, onChange }) {
         </Select>
       </Field>
       <Field label="النقاط لكل نجمة" htmlFor="rpps">
-        <Input
+        <NumberInput
           id="rpps"
-          type="number"
           value={config.points_per_star ?? 1}
           onChange={(e) => onChange({ ...config, points_per_star: Number(e.target.value) })}
         />
@@ -202,11 +198,9 @@ export function RatingConfig({ config, onChange }) {
 export function TextConfig({ config, onChange }) {
   return (
     <Field label="الحد الأقصى للأحرف" htmlFor="tmax">
-      <Input
+      <NumberInput
         id="tmax"
-        type="number"
-        min={1}
-        max={2000}
+        decimal={false}
         value={config.max_length ?? 500}
         onChange={(e) => onChange({ ...config, max_length: Number(e.target.value) })}
       />

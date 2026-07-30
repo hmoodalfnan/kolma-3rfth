@@ -113,6 +113,17 @@ describe('validateDrafts', () => {
     expect(row).toMatchObject({ group_id: 'g1', group_name: 'غرفة 101' });
   });
 
+  it('reads a phone and a PIN written in Arabic-Indic digits', () => {
+    // ٠١٢٣٤٥٦٧٨٩ is what an Arabic keyboard produces, and \d does not match it:
+    // a perfectly correct PIN was reported as "not digits".
+    const row = check({ group: 'غرفة 101', phone: '١٢٣٤٥٦٧٨', pin: '٤٨٢٩١٣' });
+    expect(row.errors).toEqual([]);
+    // Normalised before it leaves, so the student's PIN is the same secret
+    // however it was typed.
+    expect(row.student.pin).toBe('482913');
+    expect(row.phone_link).toContain('12345678');
+  });
+
   it('passes a row that carries nothing but a full name', () => {
     const row = check({ group: '', phone: '', pin: '' });
     expect(row.errors).toEqual([]);

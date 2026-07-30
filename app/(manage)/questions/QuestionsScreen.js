@@ -276,12 +276,7 @@ export function QuestionsScreen() {
  * box that said so in passing — the button and the effect disagreed.
  */
 function RemoveQuestionDialog({ question, error, onHide, onDelete, onCancel }) {
-  const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(null);
-
-  useEffect(() => setTyped(''), [question]);
-
-  const matches = question ? typed.trim() === question.title.trim() : false;
 
   return (
     <Modal open={Boolean(question)} onClose={onCancel} title="حذف البند" error={error} size="sm">
@@ -318,22 +313,12 @@ function RemoveQuestionDialog({ question, error, onHide, onDelete, onCancel }) {
               يمكن التراجع.
             </p>
 
-            <label className="mt-2 block text-xs font-semibold" htmlFor="del-qtitle">
-              اكتب عنوان البند للتأكيد
-            </label>
-            <input
-              id="del-qtitle"
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              placeholder={question.title}
-              autoComplete="off"
-              className="mt-1 w-full rounded-xl border border-line bg-panel px-3 py-2 text-sm text-ink outline-none focus:border-navy-500"
-            />
-
+            {/* No name to type back. This dialog is already the confirmation,
+                and the two choices above and below differ enough that picking
+                the wrong one is a decision, not a slip. */}
             <Button
               tone="danger"
               className="mt-2 min-h-0 px-3 py-1.5 text-xs"
-              disabled={!matches}
               loading={busy === 'delete'}
               onClick={async () => {
                 setBusy('delete');

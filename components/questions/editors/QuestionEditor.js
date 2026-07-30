@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Field, Input, Select, Textarea } from '@/components/ui/Field';
+import { Field, Input, NumberInput, Select, Textarea } from '@/components/ui/Field';
 import { ErrorText } from '@/components/manage/Panel';
 import { QuestionCard } from '@/components/questions';
 import { QUESTION_TYPES, TYPE_LABELS, TYPE_HINTS, DEFAULT_CONFIG } from '@/lib/questions/types';
@@ -163,9 +163,8 @@ export function QuestionEditor({
 
         {usesFlatPoints && (
           <Field label="النقاط" htmlFor="qpoints">
-            <Input
+            <NumberInput
               id="qpoints"
-              type="number"
               value={draft.points}
               onChange={(e) => setDraft({ ...draft, points: Number(e.target.value) })}
             />

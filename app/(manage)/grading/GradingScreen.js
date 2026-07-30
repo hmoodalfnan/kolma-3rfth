@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Field, Input, Select } from '@/components/ui/Field';
+import { Field, Input, NumberInput, Select } from '@/components/ui/Field';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { Modal, ModalActions } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
@@ -287,9 +287,9 @@ function GrantForm({
               );
             })}
 
-            <Input
+            <NumberInput
               id={`${title}-points`}
-              type="number"
+              signed
               value={points}
               onChange={(e) => setPoints(e.target.value)}
               aria-label="قيمة أخرى"

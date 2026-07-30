@@ -22,6 +22,33 @@ function Harness({ onValue }) {
 const boxes = () => screen.getAllByRole('textbox');
 
 describe('PinInput entry order', () => {
+  it('moves to the next box after each digit and stays there', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(boxes()[0], '4');
+    // The guard that keeps entry in order must not undo the advance it was
+    // just handed: reading a stale value, it sent focus back to the first box
+    // and no code longer than one digit could be typed.
+    expect(document.activeElement).toBe(boxes()[1]);
+
+    await user.keyboard('8');
+    expect(document.activeElement).toBe(boxes()[2]);
+  });
+
+  it('accepts a full code typed straight through', async () => {
+    const user = userEvent.setup();
+    const onValue = vi.fn();
+    render(<Harness onValue={onValue} />);
+
+    boxes()[0].focus();
+    await user.keyboard('4829');
+
+    expect(boxes().map((b) => b.value)).toEqual(['4', '8', '2', '9']);
+    expect(onValue).toHaveBeenLastCalledWith('4829');
+  });
+
+
   it('sends a digit typed into a far box to the first blank one', async () => {
     const user = userEvent.setup();
     render(<Harness />);

@@ -18,8 +18,10 @@ import {
   createGroup,
   updateGroup,
   deleteGroup,
+  deleteSchedule,
   post,
 } from '@/lib/manage/api';
+import { getStoredRole } from '@/lib/auth/session';
 import { todayInRiyadh } from '@/lib/schedule-time/day';
 import { JoinLinkRow } from './JoinLinkRow';
 import { ScheduleStaffPanel } from './ScheduleStaffPanel';
@@ -348,7 +350,109 @@ function ScheduleSettings({ schedule, onChanged }) {
           }}
         />
       </div>
+
+      <DangerZone schedule={schedule} />
     </Panel>
+  );
+}
+
+/**
+ * Deleting a whole trip, for the super admin alone.
+ *
+ * The role is read from the stored profile only to decide what to render — the
+ * schedules_delete policy and the route handler are what actually decide, so a
+ * tampered localStorage buys a button that fails. A manager gets «الخروج من
+ * الرحلة» on the staff panel instead, which is the thing they actually want:
+ * off the trip, without taking everyone else's work with them.
+ */
+function DangerZone({ schedule }) {
+  const [confirming, setConfirming] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useTransientError();
+  const uid = useId();
+
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  useEffect(() => setIsSuperAdmin(getStoredRole()?.role === 'super_admin'), []);
+
+  if (!isSuperAdmin) return null;
+
+  const matches = typed.trim() === schedule.name.trim();
+
+  return (
+    <div className="mt-4 rounded-xl border border-rose-600/40 p-3">
+      <p className="text-sm font-bold text-danger-ink">حذف الرحلة نهائياً</p>
+      <p className="mt-1 text-xs text-muted">
+        تُحذف الرحلة وكل ما فيها: الطلاب وحساباتهم، والمجموعات، والبنود وإجاباتها، وبنود التقييم
+        وعملياتها. لا يمكن التراجع، ولا يستطيع هذا الإجراء غير المشرف العام.
+      </p>
+
+      <Button
+        tone="danger"
+        className="mt-2 min-h-0 px-3 py-1.5 text-xs"
+        onClick={() => {
+          setTyped('');
+          setError('');
+          setConfirming(true);
+        }}
+      >
+        حذف الرحلة
+      </Button>
+
+      <Modal
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        title="حذف الرحلة نهائياً"
+        error={error}
+        size="sm"
+      >
+        <form
+          className="grid gap-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!matches) return;
+            setBusy(true);
+            try {
+              await deleteSchedule(schedule.id, typed.trim());
+              // Everything on this screen belongs to a trip that no longer
+              // exists, including the remembered selection — reload rather than
+              // patch a page out from under itself.
+              window.location.assign('/schedules');
+            } catch (err) {
+              setError(err.message);
+              setBusy(false);
+            }
+          }}
+        >
+          <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink">
+            سيُحذف كل شيء في «{schedule.name}» نهائياً: الطلاب وحسابات دخولهم، وإجاباتهم، ونقاطهم،
+            والمجموعات، والبنود، وبنود التقييم. لا يمكن استرجاع أي منها.
+          </p>
+          <p className="text-xs text-muted">
+            للاحتفاظ بالرحلة كسجل دون أن يكتب فيها أحد، استخدم «أرشفة الرحلة» بدلاً من الحذف.
+          </p>
+
+          <Field label="اكتب اسم الرحلة للتأكيد" htmlFor={`${uid}-confirm`}>
+            <Input
+              id={`${uid}-confirm`}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={schedule.name}
+              autoComplete="off"
+            />
+          </Field>
+
+          <ModalActions>
+            <Button type="submit" tone="danger" loading={busy} disabled={!matches}>
+              حذف الرحلة وكل محتواها
+            </Button>
+            <Button tone="ghost" onClick={() => setConfirming(false)}>
+              إلغاء
+            </Button>
+          </ModalActions>
+        </form>
+      </Modal>
+    </div>
   );
 }
 

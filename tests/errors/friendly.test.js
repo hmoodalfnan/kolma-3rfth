@@ -15,6 +15,14 @@ describe('friendlyError', () => {
     expect(friendlyError({ message: 'JWT expired' })).toContain('جلستك');
   });
 
+  it('sends a future-dated token to the clock, not to the login page', () => {
+    const text = friendlyError({ message: 'JWT issued at future' });
+    expect(text).toContain('ساعة جهازك');
+    // Signing in again restamps the token with the same wrong clock, so that
+    // advice would be a loop with no exit.
+    expect(text).not.toContain('سجّل الدخول');
+  });
+
   it('reads a missing column as an out-of-date database', () => {
     const text = friendlyError({
       message: "Could not find the 'must_change_password' column of 'app_users'",

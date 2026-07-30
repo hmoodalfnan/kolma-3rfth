@@ -224,16 +224,9 @@ export function ScheduleStaffPanel({ schedule }) {
                 </div>
 
                 {isSelf ? (
-                  <Button
-                    tone="outline"
-                    className="min-h-0 px-3 py-1.5 text-xs"
-                    onClick={() => {
-                      setFormError('');
-                      setLeaving(true);
-                    }}
-                  >
-                    الخروج من الرحلة
-                  </Button>
+                  <span className="rounded-full bg-chip px-2.5 py-1 text-[11px] font-bold text-brand">
+                    حسابك
+                  </span>
                 ) : locked ? (
                   <span className="rounded-full bg-chip px-2.5 py-1 text-[11px] font-bold text-brand">
                     لا يمكن إزالته
@@ -251,6 +244,36 @@ export function ScheduleStaffPanel({ schedule }) {
             );
           })}
         </ul>
+      )}
+
+      {/* Its own block, not a small button in a row of names.
+          Leaving is the one action here that changes what *you* can see
+          afterwards, and as a third button beside «إزالة» it read as another
+          way of tidying the list. It now says who it applies to, what happens
+          to the trip, and what you lose — before it is pressed rather than in
+          the dialog that follows. */}
+      {assigned.has(me) && (
+        <div className="mt-4 rounded-xl border border-line p-3">
+          <p className="text-sm font-bold">الخروج من هذه الرحلة</p>
+          <p className="mt-1 text-xs text-muted">
+            تخرج أنت من «{schedule.name}» ولن تظهر لك بعدها ولن تستطيع فتحها أو التعديل عليها.
+            {iAmOwner && successor
+              ? ` تنتقل ملكيتها إلى ${successor.display_name} وتستمر كما هي.`
+              : iAmOwner
+                ? ' ولأنك آخر مشرف عليها فستُؤرشف: تبقى محفوظة للاطلاع، ويتوقف الطلاب عن التسجيل فيها.'
+                : ' وتستمر الرحلة مع بقية المشرفين.'}
+          </p>
+          <Button
+            tone="danger"
+            className="mt-2 min-h-0 px-3 py-1.5 text-xs"
+            onClick={() => {
+              setFormError('');
+              setLeaving(true);
+            }}
+          >
+            {iAmOwner && !successor ? 'الخروج وأرشفة الرحلة' : 'الخروج من الرحلة'}
+          </Button>
+        </div>
       )}
     </Panel>
   );
