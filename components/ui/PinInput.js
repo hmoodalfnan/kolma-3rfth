@@ -22,8 +22,22 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
   const emit = (next) => onChange(next.join('').trimEnd());
 
   function focusBox(index) {
+    const node = refs.current[index];
+    if (!node) return;
+
     wanted.current = index;
-    refs.current[index]?.focus();
+    node.focus();
+
+    // iOS hands focus back to the field that produced the keystroke once the
+    // input event finishes, which put the caret straight back where it started —
+    // so the code only advanced on the second press of each digit. Asking again
+    // on the next frame settles it after the browser has had its say. `wanted`
+    // is still set only if the first attempt did not stick.
+    requestAnimationFrame(() => {
+      if (wanted.current !== index) return;
+      if (document.activeElement === node) wanted.current = null;
+      else node.focus();
+    });
   }
 
   /** Index of the first blank box, or the last box when the code is full. */
@@ -95,10 +109,15 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
    * reachable, so a digit already typed can still be corrected.
    */
   function handleFocus(index, event) {
-    const invited = wanted.current === index;
-    wanted.current = null;
+    // Our own move, which the guard must not undo. `wanted` stays set on any
+    // other arrival so the retry above can tell the move never landed.
+    if (wanted.current === index) {
+      wanted.current = null;
+      event.target.select();
+      return;
+    }
 
-    if (!invited && index > firstEmpty()) {
+    if (index > firstEmpty()) {
       focusBox(firstEmpty());
       return;
     }
@@ -147,11 +166,12 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
             onFocus={(e) => handleFocus(index, e)}
             onPointerDown={(e) => handlePointerDown(index, e)}
             onPaste={handlePaste}
-            // Every box looks the same. Fading the ones that cannot be typed in
-            // yet washed a pale border out to nothing on a white screen, and the
-            // six boxes read as one — so a code six digits long looked like a
-            // field for a single number.
-            className="size-12 rounded-xl border border-line bg-panel text-center text-xl font-bold text-ink outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/25 disabled:opacity-60"
+            // Two pixels of a navy tint, not one of --color-line. That border is
+            // #e3e6f0 on white — barely over 1:1 against the page — so on a
+            // phone only the focused box could be seen and a six-digit code
+            // looked like a field for a single number. Every box looks the same
+            // as every other; the focus ring is what marks the live one.
+            className="size-12 rounded-xl border-2 border-navy-500/30 bg-panel text-center text-xl font-bold text-ink outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/25 disabled:opacity-60"
           />
         );
       })}

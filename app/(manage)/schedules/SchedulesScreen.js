@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Field, Input, Select } from '@/components/ui/Field';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { Modal, ModalActions } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
 import { useSchedule } from '@/lib/manage/useSchedule';
@@ -462,6 +463,7 @@ function GroupsPanel({ schedule }) {
   const [students, setStudents] = useState([]);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [removing, setRemoving] = useState(null);
   const [members, setMembers] = useState(null);
   const [error, setError] = useTransientError();
 
@@ -570,6 +572,29 @@ function GroupsPanel({ schedule }) {
         onSave={saveMembers}
       />
 
+      <ConfirmDialog
+        open={Boolean(removing)}
+        title="حذف المجموعة"
+        error={error}
+        message={
+          removing
+            ? `سيُحذف «${removing.name}» ويخرج ${students.filter((st) => st.group_id === removing.id).length} طالباً منه.`
+            : ''
+        }
+        note="لا يُحذف أي طالب — يبقون في الرحلة بلا مجموعة، ويمكن ضمّهم لمجموعة أخرى."
+        onCancel={() => setRemoving(null)}
+        onConfirm={async () => {
+          try {
+            await deleteGroup(removing.id);
+            setGroups((rows) => rows.filter((r) => r.id !== removing.id));
+            setRemoving(null);
+            toast.push('تم حذف المجموعة — بقي الطلاب بدون مجموعة', 'info');
+          } catch (err) {
+            setError(err.message);
+          }
+        }}
+      />
+
       {students.some((st) => !st.group_id) && groups.length > 0 && (
         <p className="mt-3 rounded-xl bg-gold-100 px-3 py-2 text-sm font-semibold text-gold-700">
           {students.filter((st) => !st.group_id).length} طالب بلا مجموعة — افتح «الطلاب» في أي
@@ -598,18 +623,7 @@ function GroupsPanel({ schedule }) {
                 <Button tone="outline" onClick={() => setEditing(g)}>
                   تعديل
                 </Button>
-                <Button
-                  tone="danger"
-                  onClick={async () => {
-                    try {
-                      await deleteGroup(g.id);
-                      setGroups((rows) => rows.filter((r) => r.id !== g.id));
-                      toast.push('تم حذف المجموعة — بقي الطلاب بدون مجموعة', 'info');
-                    } catch (err) {
-                      setError(err.message);
-                    }
-                  }}
-                >
+                <Button tone="danger" onClick={() => setRemoving(g)}>
                   حذف
                 </Button>
               </div>

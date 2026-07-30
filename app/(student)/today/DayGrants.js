@@ -18,17 +18,14 @@ export function DayGrants({ studentId, dayKey }) {
     if (!studentId || !dayKey) return undefined;
     let alive = true;
 
-    // point_events are stamped with created_at, not an entry_date, so the day is
-    // a range over the Riyadh calendar day rather than an equality.
-    const from = `${dayKey}T00:00:00+03:00`;
-    const to = `${dayKey}T23:59:59+03:00`;
-
+    // The day the points are *about*, which since 0019 is a column of its own.
+    // Matching on created_at meant an evening's tidying-up all landed on the day
+    // it was typed, and anything entered after midnight landed on the next one.
     getBrowserClient()
       .from('point_events')
       .select('id, points, note, created_at, criteria(name)')
       .eq('student_id', studentId)
-      .gte('created_at', from)
-      .lte('created_at', to)
+      .eq('entry_date', dayKey)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         if (alive) setRows(data ?? []);

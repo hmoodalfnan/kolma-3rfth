@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Field, Input, NumberInput, Select } from '@/components/ui/Field';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { Modal, ModalActions } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
 import { useSchedule } from '@/lib/manage/useSchedule';
@@ -21,10 +22,68 @@ import {
   grantPoints,
   undoGrant,
 } from '@/lib/manage/api';
+import { addDays, formatDayArabic, todayInRiyadh } from '@/lib/schedule-time/day';
 import { useTransientError } from '@/lib/ui/useTransientError';
 
 // Symmetric, so a deduction is the same gesture as an award.
 const QUICK = [1, 3, 5, -1, -3, -5];
+
+/**
+ * Which day the points are about.
+ *
+ * Almost always today or yesterday — the evening tidy-up, or the note about
+ * Tuesday that gets entered on Wednesday — so those are one tap each and the
+ * full picker is there for the rest. Bounded by the trip: a grant outside it
+ * would never appear on any day the student can open.
+ */
+function DayChooser({ schedule, value, onChange, id }) {
+  const today = todayInRiyadh();
+  const yesterday = addDays(today, -1);
+  const latest = schedule.end_date && schedule.end_date < today ? schedule.end_date : today;
+
+  const shortcuts = [
+    { key: today, label: 'اليوم' },
+    { key: yesterday, label: 'أمس' },
+  ].filter((s) => s.key >= schedule.start_date && s.key <= latest);
+
+  return (
+    <Field
+      label="يوم التقييم"
+      htmlFor={id}
+      hint={
+        value === today
+          ? 'ستظهر النقاط للطالب في صفحة اليوم.'
+          : `ستظهر النقاط للطالب في صفحة ${formatDayArabic(value)}.`
+      }
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        {shortcuts.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => onChange(s.key)}
+            aria-pressed={value === s.key}
+            className={`rounded-lg px-3 py-2 text-sm font-bold ${
+              value === s.key ? 'chip-selected' : 'chip'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+        <Input
+          id={id}
+          type="date"
+          value={value}
+          min={schedule.start_date}
+          max={latest}
+          onChange={(e) => e.target.value && onChange(e.target.value)}
+          aria-label="اختر تاريخاً"
+          className="w-auto flex-1"
+        />
+      </div>
+    </Field>
+  );
+}
 
 export function GradingScreen() {
   const { current } = useSchedule();
@@ -34,6 +93,7 @@ export function GradingScreen() {
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
   const [grants, setGrants] = useState([]);
+  const [undoing, setUndoing] = useState(null);
   const [error, setError] = useTransientError();
 
   const load = useCallback(async () => {
@@ -82,19 +142,27 @@ export function GradingScreen() {
       <div className="grid gap-4 lg:grid-cols-2">
         <GrantForm
           title="تقييم طالب"
+          schedule={current}
           criteria={criteria}
           targets={students.map((s) => ({
             id: s.id,
             label: `${s.full_name} — مجموعة: ${groups.find((g) => g.id === s.group_id)?.name ?? 'بدون مجموعة'}`,
           }))}
           emptyLabel="لا يوجد طلاب نشطون."
-          onSubmit={(criterionId, points, note, targetId) =>
-            submit({ criterionId, points, note, target: { kind: 'student', studentId: targetId } })
+          onSubmit={(criterionId, points, note, targetId, _members, entryDate) =>
+            submit({
+              criterionId,
+              points,
+              note,
+              entryDate,
+              target: { kind: 'student', studentId: targetId },
+            })
           }
         />
 
         <GrantForm
           title="تقييم مجموعة"
+          schedule={current}
           criteria={criteria}
           targets={groups.map((g) => ({
             id: g.id,
@@ -103,16 +171,48 @@ export function GradingScreen() {
           emptyLabel="لا توجد مجموعات."
           showApplyToMembers
           memberCount={(groupId) => students.filter((s) => s.group_id === groupId).length}
-          onSubmit={(criterionId, points, note, targetId, applyToMembers) =>
+          onSubmit={(criterionId, points, note, targetId, applyToMembers, entryDate) =>
             submit({
               criterionId,
               points,
               note,
+              entryDate,
               target: { kind: 'group', groupId: targetId, applyToMembers },
             })
           }
         />
       </div>
+
+      <ConfirmDialog
+        open={Boolean(undoing)}
+        title="حذف عملية التقييم"
+        error={error}
+        message={
+          undoing
+            ? `ستُسحب ${Math.abs(Number(undoing.points))} نقطة من ${
+                undoing.students?.full_name ?? undoing.groups?.name ?? 'الهدف'
+              } ويتغيّر رصيده.`
+            : ''
+        }
+        note={
+          undoing?.applied_to_members
+            ? 'العملية شملت كل طلاب المجموعة، وستُسحب منهم جميعاً.'
+            : 'لا يمكن التراجع عن هذا — لكن يمكنك تسجيل العملية من جديد.'
+        }
+        onCancel={() => setUndoing(null)}
+        onConfirm={async () => {
+          const id = undoing.id;
+          setGrants((rows) => rows.filter((r) => r.id !== id));
+          setUndoing(null);
+          try {
+            await undoGrant(id);
+            await load();
+          } catch (err) {
+            setError(err.message);
+            load();
+          }
+        }}
+      />
 
       <Panel title="آخر العمليات">
         {grants.length === 0 ? (
@@ -132,7 +232,10 @@ export function GradingScreen() {
                     )}
                   </span>
                   <span className="block text-xs text-muted">
-                    {g.criteria?.name} · {new Date(g.created_at).toLocaleString('ar')}
+                    {/* The day it counts for, not the moment it was typed —
+                        those differ whenever anything is backdated, and the
+                        first is the one that answers "why is this here". */}
+                    {g.criteria?.name} · {formatDayArabic(g.entry_date)}
                     {g.note ? ` · ${g.note}` : ''}
                   </span>
                 </span>
@@ -149,16 +252,7 @@ export function GradingScreen() {
                     <Button
                       tone="ghost"
                       className="min-h-0 px-2 py-1 text-xs"
-                      onClick={async () => {
-                        setGrants((rows) => rows.filter((r) => r.id !== g.id));
-                        try {
-                          await undoGrant(g.id);
-                          await load();
-                        } catch (err) {
-                          setError(err.message);
-                          load();
-                        }
-                      }}
+                      onClick={() => setUndoing(g)}
                     >
                       حذف
                     </Button>
@@ -175,6 +269,7 @@ export function GradingScreen() {
 
 function GrantForm({
   title,
+  schedule,
   criteria,
   targets,
   emptyLabel,
@@ -182,6 +277,7 @@ function GrantForm({
   showApplyToMembers = false,
   memberCount,
 }) {
+  const [entryDate, setEntryDate] = useState(() => todayInRiyadh());
   const [targetId, setTargetId] = useState('');
   const [criterionId, setCriterionId] = useState(criteria[0]?.id ?? '');
   const [points, setPoints] = useState(5);
@@ -214,7 +310,7 @@ function GrantForm({
     // The sign is carried by the value the user picked, so a criterion that
     // forbids deductions clamps rather than silently flipping it.
     const signed = criterion?.allow_negative ? value : Math.abs(value);
-    await onSubmit(criterionId, signed, note, targetId, applyToMembers);
+    await onSubmit(criterionId, signed, note, targetId, applyToMembers, entryDate);
     setNote('');
     setBusy(false);
   };
@@ -222,6 +318,13 @@ function GrantForm({
   return (
     <Panel title={title}>
       <div className="space-y-3">
+        <DayChooser
+          id={`${title}-day`}
+          schedule={schedule}
+          value={entryDate}
+          onChange={setEntryDate}
+        />
+
         <Field label="الهدف" htmlFor={`${title}-target`}>
           <Select
             id={`${title}-target`}

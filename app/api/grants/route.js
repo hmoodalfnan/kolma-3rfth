@@ -16,6 +16,13 @@ const grantSchema = z
       'النقاط خارج الحدود المسموحة',
     ),
     note: z.string().max(500).default(''),
+    // The day the points are about, which is not always the day they are typed
+    // in. Bounds are checked in the database against the trip's own dates and
+    // its own clock, because a browser's idea of "today" is not authoritative.
+    entryDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'تاريخ غير صالح')
+      .optional(),
     target: z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('student'), studentId: z.string().uuid() }).strict(),
       z
@@ -45,7 +52,7 @@ async function postHandler(request) {
   if (!parsed.success) {
     return json({ error: parsed.error.issues[0]?.message ?? 'طلب غير صالح' }, 400);
   }
-  const { scheduleId, criterionId, points, note, target } = parsed.data;
+  const { scheduleId, criterionId, points, note, target, entryDate } = parsed.data;
 
   if (!(await staffsSchedule(scoped, scheduleId))) return json({ error: 'غير مصرح' }, 403);
 
@@ -71,6 +78,7 @@ async function postHandler(request) {
           p_criterion: criterionId,
           p_points: points,
           p_note: note,
+          p_entry_date: entryDate ?? null,
         })
       : scoped.rpc('grant_group_points', {
           p_schedule: scheduleId,
@@ -79,6 +87,7 @@ async function postHandler(request) {
           p_points: points,
           p_note: note,
           p_apply_to_members: target.applyToMembers,
+          p_entry_date: entryDate ?? null,
         });
 
   const { data, error } = await rpc;
@@ -91,7 +100,7 @@ async function postHandler(request) {
     entityType: 'point_event',
     entityId: data,
     action: 'grant',
-    after: { criterion: criterion.name, points, note, target },
+    after: { criterion: criterion.name, points, note, target, entryDate: entryDate ?? null },
     ip: clientIp(request),
     userAgent: userAgent(request),
   });
