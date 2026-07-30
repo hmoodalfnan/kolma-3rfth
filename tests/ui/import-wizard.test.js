@@ -25,15 +25,16 @@ function setup() {
   const onImport = vi.fn(async ({ students }) => ({
     created: students.map((s) => ({ id: s.full_name, full_name: s.full_name, tempPin: '111111' })),
   }));
+  const onCancel = vi.fn();
   const view = render(
     <ImportWizard
       groups={groups}
       scheduleName="رحلة الصيف"
       onImport={onImport}
-      onCancel={() => {}}
+      onCancel={onCancel}
     />,
   );
-  return { ...view, onImport, user: userEvent.setup() };
+  return { ...view, onImport, onCancel, user: userEvent.setup() };
 }
 
 const fileInput = (container) => container.querySelector('#impfile');
@@ -126,6 +127,46 @@ describe('ImportWizard review', () => {
     await user.click(screen.getAllByRole('button', { name: /^حذف/ })[0]);
 
     expect(importButton().textContent).toMatch(/إضافة 1 طالباً/);
+  });
+
+  it('confirms what was added instead of emptying itself in silence', async () => {
+    const { container, user, onCancel } = setup();
+    await user.upload(
+      fileInput(container),
+      await upload([
+        ['محمد علي', 'غرفة 101', '', ''],
+        ['أحمد محمود', 'غرفة 101', '', ''],
+      ]),
+    );
+    await settle();
+    await user.click(importButton());
+
+    expect(await screen.findByText(/تمت إضافة 2 طالباً إلى رحلة الصيف/)).toBeTruthy();
+
+    // The login codes are rendered by the screen behind this dialog, so the
+    // confirmation's job is to get out of their way.
+    await user.click(screen.getByRole('button', { name: 'عرض رموز الدخول' }));
+    expect(onCancel).toHaveBeenCalled();
+  });
+
+  it('keeps the rows it could not add so they can be repaired', async () => {
+    const { container, user } = setup();
+    await user.upload(
+      fileInput(container),
+      await upload([
+        ['محمد علي', 'غرفة 101', '', ''],
+        ['', 'غرفة 101', '', ''],
+      ]),
+    );
+    await settle();
+    await user.click(importButton());
+
+    expect(await screen.findByText(/تمت إضافة 1 طالباً\. بقي 1 صفاً به مشاكل/)).toBeTruthy();
+    // The one that went through is gone; the one that could not stays, faults
+    // and all, ready for a second pass.
+    expect(screen.queryByText('محمد علي')).toBeNull();
+    expect(screen.getByText(/الاسم مطلوب/)).toBeTruthy();
+    expect(importButton().textContent).toMatch(/إضافة 0 طالباً/);
   });
 
   it('sends one call per group so each student lands where the file put them', async () => {

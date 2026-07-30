@@ -5,12 +5,27 @@ import { QuestionCard } from '@/components/questions';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { SkeletonCard, SkeletonList } from '@/components/ui/Skeleton';
 import { groupBySection } from '@/lib/questions/active';
-import { formatDayArabic, todayInRiyadh } from '@/lib/schedule-time/day';
+import { formatDayArabic, lockReason, todayInRiyadh } from '@/lib/schedule-time/day';
 import { useStudentContext } from '@/lib/student/useStudentContext';
 import { useDay } from '@/lib/student/useDay';
 import { DateStrip } from './DateStrip';
 import { DayGrants } from './DayGrants';
 import { CompactBoolSection } from '@/components/questions/CompactBoolSection';
+
+/**
+ * One sentence per reason a day is closed. A day that has not arrived yet had
+ * been reported as a missed deadline, which is the opposite of what is true and
+ * sent students looking for a way to appeal it.
+ */
+const LOCK_TEXT = {
+  archived: () => 'هذه الرحلة مؤرشفة — للاطلاع فقط.',
+  future: () => 'هذا اليوم لم يأتِ بعد — تعال إليه في وقته.',
+  before_start: (s) => `هذا اليوم قبل بداية الرحلة (${s.start_date}).`,
+  after_end: (s) => `انتهت الرحلة في ${s.end_date} — للاطلاع فقط.`,
+  backfill_closed: () => 'انتهت مهلة التعديل على هذا اليوم.',
+};
+
+const LOCK_FALLBACK = 'لا يمكن التعديل على هذا اليوم.';
 
 export function DailySheet() {
   const ctx = useStudentContext();
@@ -90,9 +105,7 @@ export function DailySheet() {
 
       {!day.editable && (
         <p className="rounded-xl bg-gold-100 px-3 py-2 text-center text-sm font-semibold text-gold-700">
-          {ctx.schedule.status === 'archived'
-            ? 'هذه الرحلة مؤرشفة — للاطلاع فقط.'
-            : 'انتهت مهلة التعديل على هذا اليوم.'}
+          {LOCK_TEXT[lockReason(ctx.schedule, dayKey)]?.(ctx.schedule) ?? LOCK_FALLBACK}
         </p>
       )}
 

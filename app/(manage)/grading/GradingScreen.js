@@ -11,7 +11,10 @@ import { useSchedule } from '@/lib/manage/useSchedule';
 import {
   listCriteria,
   createCriterion,
+  updateCriterion,
   archiveCriterion,
+  deleteCriterion,
+  countCriterionGrants,
   listGroups,
   listStudents,
   listGrants,
@@ -74,12 +77,7 @@ export function GradingScreen() {
     <div className="space-y-4">
       <ErrorText>{error}</ErrorText>
 
-      <CriteriaPanel
-        scheduleId={current.id}
-        criteria={criteria}
-        onChanged={load}
-        onError={setError}
-      />
+      <CriteriaPanel scheduleId={current.id} criteria={criteria} onChanged={load} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <GrantForm
@@ -340,98 +338,242 @@ function GrantForm({
   );
 }
 
-function CriteriaPanel({ scheduleId, criteria, onChanged, onError }) {
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState('');
-  const [allowNegative, setAllowNegative] = useState(true);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (creating) {
-      setName('');
-      setAllowNegative(true);
-    }
-  }, [creating]);
+function CriteriaPanel({ scheduleId, criteria, onChanged }) {
+  const [editing, setEditing] = useState(null); // 'new' | criterion row
+  const [removing, setRemoving] = useState(null);
+  const [dialogError, setDialogError] = useTransientError();
 
   return (
     <Panel
       title="بنود التقييم"
-      action={<Button onClick={() => setCreating(true)}>بند تقييم جديد</Button>}
+      action={<Button onClick={() => setEditing('new')}>بند تقييم جديد</Button>}
     >
-      <Modal
-        open={creating}
-        onClose={() => setCreating(false)}
-        title="بند تقييم جديد"
-        size="sm"
-      >
-        <form
-          className="grid gap-3"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const trimmed = name.trim();
-            if (!trimmed) return;
-            setBusy(true);
-            try {
-              await createCriterion(scheduleId, trimmed, allowNegative, criteria.length);
-              onChanged();
-              setCreating(false);
-            } catch (err) {
-              onError(err.message);
+      <CriterionForm
+        // Remounted between the new-criterion form and each existing one, so the
+        // dialog never opens holding the previous one's draft.
+        key={editing === 'new' ? 'new' : (editing?.id ?? 'closed')}
+        open={editing !== null}
+        criterion={editing === 'new' ? null : editing}
+        error={dialogError}
+        onCancel={() => setEditing(null)}
+        onSubmit={async ({ name, allowNegative }) => {
+          try {
+            if (editing === 'new') {
+              await createCriterion(scheduleId, name, allowNegative, criteria.length);
+            } else {
+              await updateCriterion(editing.id, { name, allow_negative: allowNegative });
             }
-            setBusy(false);
-          }}
-        >
-          <Field label="اسم البند" htmlFor="cname" hint="مثل: التعاون">
-            <Input id="cname" value={name} onChange={(e) => setName(e.target.value)} required />
-          </Field>
+            onChanged();
+            setEditing(null);
+          } catch (err) {
+            setDialogError(err.message);
+          }
+        }}
+      />
 
-          <label className="flex items-center gap-2 text-sm font-semibold">
-            <input
-              type="checkbox"
-              checked={allowNegative}
-              onChange={(e) => setAllowNegative(e.target.checked)}
-              className="accent-[color:var(--color-accent)]"
-            />
-            يسمح بالخصم
-          </label>
+      <RemoveCriterionDialog
+        criterion={removing}
+        error={dialogError}
+        onCancel={() => setRemoving(null)}
+        onDone={async (action) => {
+          try {
+            if (action === 'delete') await deleteCriterion(removing.id);
+            else await archiveCriterion(removing.id);
+            onChanged();
+            setRemoving(null);
+          } catch (err) {
+            setDialogError(err.message);
+          }
+        }}
+      />
+
+      {criteria.length === 0 ? (
+        <EmptyState>لا توجد بنود تقييم — أضف بنداً للبدء.</EmptyState>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {criteria.map((c) => (
+            <li
+              key={c.id}
+              className="flex flex-wrap items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold break-words">{c.name}</span>
+                <span className="block text-xs text-muted">
+                  {c.allow_negative ? 'يسمح بالزيادة والخصم' : 'زيادة فقط'}
+                </span>
+              </span>
+              <Button
+                tone="outline"
+                className="min-h-0 px-3 py-1.5 text-xs"
+                onClick={() => setEditing(c)}
+              >
+                تعديل
+              </Button>
+              <Button
+                tone="danger"
+                className="min-h-0 px-3 py-1.5 text-xs"
+                onClick={() => setRemoving(c)}
+              >
+                حذف
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function CriterionForm({ open, criterion, error, onSubmit, onCancel }) {
+  const [name, setName] = useState(criterion?.name ?? '');
+  const [allowNegative, setAllowNegative] = useState(criterion?.allow_negative ?? true);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title={criterion ? 'تعديل بند التقييم' : 'بند تقييم جديد'}
+      error={error}
+      size="sm"
+    >
+      <form
+        className="grid gap-3"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const trimmed = name.trim();
+          if (!trimmed) return;
+          setBusy(true);
+          await onSubmit({ name: trimmed, allowNegative });
+          setBusy(false);
+        }}
+      >
+        <Field label="اسم البند" htmlFor="cname" hint="مثل: التعاون">
+          <Input id="cname" value={name} onChange={(e) => setName(e.target.value)} required />
+        </Field>
+
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <input
+            type="checkbox"
+            checked={allowNegative}
+            onChange={(e) => setAllowNegative(e.target.checked)}
+            className="accent-[color:var(--color-accent)]"
+          />
+          يسمح بالخصم
+        </label>
+
+        {criterion && (
+          <p className="text-xs text-muted">
+            تغيير الاسم يسري على العمليات السابقة أيضاً — البند واحد، والاسم صفة له.
+          </p>
+        )}
+
+        <ModalActions>
+          <Button type="submit" loading={busy}>
+            {criterion ? 'حفظ' : 'إضافة'}
+          </Button>
+          <Button tone="ghost" onClick={onCancel}>
+            إلغاء
+          </Button>
+        </ModalActions>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * A criterion with grants behind it cannot simply go: the points already given
+ * out reference it, and the database refuses to orphan them. So the dialog
+ * counts them first and offers the honest choice — hide it, or delete it along
+ * with every grant made under it.
+ */
+function RemoveCriterionDialog({ criterion, error, onDone, onCancel }) {
+  const [grants, setGrants] = useState(null);
+  const [busy, setBusy] = useState(null);
+
+  useEffect(() => {
+    if (!criterion) return;
+    setGrants(null);
+    let alive = true;
+    countCriterionGrants(criterion.id)
+      .then((n) => alive && setGrants(n))
+      .catch(() => alive && setGrants(-1)); // unknown; the buttons still work
+    return () => {
+      alive = false;
+    };
+  }, [criterion]);
+
+  const run = async (action) => {
+    setBusy(action);
+    await onDone(action);
+    setBusy(null);
+  };
+
+  return (
+    <Modal
+      open={Boolean(criterion)}
+      onClose={onCancel}
+      title="حذف بند التقييم"
+      error={error}
+      size="sm"
+    >
+      {criterion && (
+        <div className="grid gap-4">
+          <p className="text-sm">
+            البند: <span className="font-bold">{criterion.name}</span>
+          </p>
+
+          {grants === null ? (
+            <p className="text-sm text-muted">جارٍ حساب العمليات المرتبطة…</p>
+          ) : grants < 0 ? (
+            <p className="text-sm text-muted">تعذّر حساب العمليات المرتبطة به.</p>
+          ) : grants > 0 ? (
+            <p className="rounded-xl bg-gold-100 px-3 py-2 text-sm font-semibold text-gold-700">
+              مرتبط به {grants} عملية تقييم سابقة.
+            </p>
+          ) : (
+            <p className="text-sm text-muted">لا توجد عمليات تقييم مرتبطة به.</p>
+          )}
+
+          <div className="rounded-xl border border-line p-3">
+            <p className="text-sm font-semibold">إخفاء البند</p>
+            <p className="mt-1 text-xs text-muted">
+              يختفي من قوائم التقييم، وتبقى العمليات السابقة ونقاطها كما هي.
+            </p>
+            <Button
+              tone="outline"
+              className="mt-2 min-h-0 px-3 py-1.5 text-xs"
+              loading={busy === 'archive'}
+              onClick={() => run('archive')}
+            >
+              إخفاء
+            </Button>
+          </div>
+
+          <div className="rounded-xl border border-rose-600/40 p-3">
+            <p className="text-sm font-semibold text-danger-ink">حذف نهائي</p>
+            <p className="mt-1 text-xs text-muted">
+              {grants > 0
+                ? `يُحذف البند و${grants} عملية تقييم معه، فتتغيّر أرصدة من حصلوا عليها. لا يمكن التراجع.`
+                : 'يُحذف البند وأي عمليات تقييم تمّت تحته. لا يمكن التراجع.'}
+            </p>
+            <Button
+              tone="danger"
+              className="mt-2 min-h-0 px-3 py-1.5 text-xs"
+              loading={busy === 'delete'}
+              onClick={() => run('delete')}
+            >
+              حذف نهائياً
+            </Button>
+          </div>
 
           <ModalActions>
-            <Button type="submit" loading={busy}>
-              إضافة
-            </Button>
-            <Button tone="ghost" onClick={() => setCreating(false)}>
+            <Button tone="ghost" onClick={onCancel}>
               إلغاء
             </Button>
           </ModalActions>
-        </form>
-      </Modal>
-
-      <ul className="mt-3 flex flex-wrap gap-2">
-        {criteria.map((c) => (
-          <li
-            key={c.id}
-            className="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm"
-          >
-            <span className="font-semibold">{c.name}</span>
-            <span className="text-xs text-muted">{c.allow_negative ? '+/−' : '+ فقط'}</span>
-            <button
-              type="button"
-              aria-label={`حذف ${c.name}`}
-              onClick={async () => {
-                try {
-                  await archiveCriterion(c.id);
-                  onChanged();
-                } catch (err) {
-                  onError(err.message);
-                }
-              }}
-              className="text-rose-600"
-            >
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
-    </Panel>
+        </div>
+      )}
+    </Modal>
   );
 }

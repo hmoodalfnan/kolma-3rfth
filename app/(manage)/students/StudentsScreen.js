@@ -14,6 +14,7 @@ import {
   createStudents,
   resetStudentPin,
   updateStudent,
+  deleteStudent,
 } from '@/lib/manage/api';
 import { fetchStudentTotals } from '@/lib/boards/queries';
 import { getBrowserClient } from '@/lib/supabase/browser';
@@ -35,7 +36,12 @@ export function StudentsScreen() {
   const [pinSheet, setPinSheet] = useState([]);
   const [pinPhones, setPinPhones] = useState({});
   const [viewing, setViewing] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [removing, setRemoving] = useState(null);
   const [error, setError] = useTransientError();
+  // A dialog covers the banner behind it, so failures raised while one is open
+  // are reported inside it instead.
+  const [dialogError, setDialogError] = useTransientError();
 
   const load = useCallback(async () => {
     if (!current) return;
@@ -112,6 +118,31 @@ export function StudentsScreen() {
       await load();
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  async function saveEdit(student, values) {
+    const before = { full_name: student.full_name, group_id: student.group_id };
+    patchRow(student.id, values);
+    try {
+      await updateStudent(student.id, values);
+      setEditing(null);
+      toast.push('تم حفظ بيانات الطالب', 'success');
+    } catch (err) {
+      patchRow(student.id, before);
+      setDialogError(err.message);
+    }
+  }
+
+  async function removeStudent(student) {
+    try {
+      await deleteStudent(student.id);
+      setStudents((rows) => rows.filter((r) => r.id !== student.id));
+      setRemoving(null);
+      if (viewing?.id === student.id) setViewing(null);
+      toast.push('تم حذف الطالب', 'success');
+    } catch (err) {
+      setDialogError(err.message);
     }
   }
 
@@ -232,7 +263,9 @@ export function StudentsScreen() {
                       >
                         {s.full_name}
                       </button>
-                      <p className="mt-0.5 text-xs text-muted">مجموعة: {groupName(s.group_id)}</p>
+                      <p className="mt-0.5 text-xs break-words text-muted">
+                        مجموعة: {groupName(s.group_id)}
+                      </p>
                     </div>
                     <p className="shrink-0 text-lg font-bold tabular-nums text-brand">
                       {Number(totalFor(s.id)?.total_points ?? 0)}
@@ -253,11 +286,14 @@ export function StudentsScreen() {
                     )}
                   </p>
 
-                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  {/* The group picker shares no row with the buttons any more.
+                      Squeezed between them it rendered «بدون مج…», which is not
+                      a group name and not "no group" either. */}
+                  <div className="mt-2.5 space-y-2">
                     <Select
                       value={s.group_id ?? ''}
                       aria-label={`مجموعة ${s.full_name}`}
-                      className="min-h-0 w-auto flex-1 py-1.5 text-xs"
+                      className="min-h-0 w-full py-1.5 text-xs"
                       onChange={(e) => setGroup(s, e.target.value || null)}
                     >
                       <option value="">بدون مجموعة</option>
@@ -268,31 +304,49 @@ export function StudentsScreen() {
                       ))}
                     </Select>
 
-                    <button
-                      type="button"
-                      onClick={() => toggleActive(s)}
-                      aria-pressed={s.is_active}
-                      title="اضغط لتغيير الحالة"
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition hover:opacity-80 ${
-                        s.is_active
-                          ? 'border-ok-ink/30 bg-ok text-ok-ink'
-                          : 'border-line bg-surface text-muted'
-                      }`}
-                    >
-                      <span aria-hidden="true">{s.is_active ? '●' : '○'}</span>
-                      {s.is_active ? 'نشط' : 'معطّل'}
-                      <span aria-hidden="true" className="opacity-60">
-                        ⇄
-                      </span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleActive(s)}
+                        aria-pressed={s.is_active}
+                        title="اضغط لتغيير الحالة"
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition hover:opacity-80 ${
+                          s.is_active
+                            ? 'border-ok-ink/30 bg-ok text-ok-ink'
+                            : 'border-line bg-surface text-muted'
+                        }`}
+                      >
+                        <span aria-hidden="true">{s.is_active ? '●' : '○'}</span>
+                        {s.is_active ? 'نشط' : 'معطّل'}
+                        <span aria-hidden="true" className="opacity-60">
+                          ⇄
+                        </span>
+                      </button>
 
-                    <Button
-                      tone="outline"
-                      className="min-h-0 px-3 py-1.5 text-xs"
-                      onClick={() => resetPin(s)}
-                    >
-                      إعادة تعيين الرمز
-                    </Button>
+                      <Button
+                        tone="outline"
+                        className="min-h-0 px-3 py-1.5 text-xs"
+                        onClick={() => setEditing(s)}
+                      >
+                        تعديل
+                      </Button>
+
+                      <Button
+                        tone="outline"
+                        className="min-h-0 px-3 py-1.5 text-xs"
+                        onClick={() => resetPin(s)}
+                      >
+                        إعادة تعيين الرمز
+                      </Button>
+
+                      <Button
+                        tone="danger"
+                        className="min-h-0 px-3 py-1.5 text-xs"
+                        onClick={() => setRemoving(s)}
+                      >
+                        حذف
+                      </Button>
+                    </div>
                   </div>
                 </li>
               ))}
@@ -370,13 +424,29 @@ export function StudentsScreen() {
                           </button>
                         </td>
                         <td className="p-2">
-                          <Button
-                            tone="outline"
-                            className="min-h-0 px-3 py-1.5 text-xs"
-                            onClick={() => resetPin(s)}
-                          >
-                            إعادة تعيين الرمز
-                          </Button>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Button
+                              tone="outline"
+                              className="min-h-0 px-3 py-1.5 text-xs"
+                              onClick={() => setEditing(s)}
+                            >
+                              تعديل
+                            </Button>
+                            <Button
+                              tone="outline"
+                              className="min-h-0 px-3 py-1.5 text-xs"
+                              onClick={() => resetPin(s)}
+                            >
+                              إعادة تعيين الرمز
+                            </Button>
+                            <Button
+                              tone="danger"
+                              className="min-h-0 px-3 py-1.5 text-xs"
+                              onClick={() => setRemoving(s)}
+                            >
+                              حذف
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -387,6 +457,21 @@ export function StudentsScreen() {
           </>
         )}
       </Panel>
+
+      <EditStudentForm
+        student={editing}
+        groups={groups}
+        error={dialogError}
+        onCancel={() => setEditing(null)}
+        onSubmit={(values) => saveEdit(editing, values)}
+      />
+
+      <DeleteStudentDialog
+        student={removing}
+        error={dialogError}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => removeStudent(removing)}
+      />
 
       {/* The same record the leaderboard opens. One screen for "what has this
           student done", reachable from wherever the question comes up. */}
@@ -407,6 +492,137 @@ export function StudentsScreen() {
         onClose={() => setViewing(null)}
       />
     </div>
+  );
+}
+
+function EditStudentForm({ student, groups, error, onSubmit, onCancel }) {
+  const [name, setName] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Seeded each time it opens on a student, not at mount: the dialog stays
+  // mounted between openings and would otherwise show the previous one.
+  useEffect(() => {
+    if (!student) return;
+    setName(student.full_name);
+    setGroupId(student.group_id ?? '');
+  }, [student]);
+
+  return (
+    <Modal
+      open={Boolean(student)}
+      onClose={onCancel}
+      title="تعديل بيانات الطالب"
+      error={error}
+      description="الرمز السري لا يتغيّر من هنا — استخدم «إعادة تعيين الرمز»."
+      size="sm"
+    >
+      <form
+        className="grid gap-3"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const trimmed = name.trim();
+          if (!trimmed) return;
+          setBusy(true);
+          await onSubmit({ full_name: trimmed, group_id: groupId || null });
+          setBusy(false);
+        }}
+      >
+        <Field label="اسم الطالب" htmlFor="edit-stname">
+          <Input
+            id="edit-stname"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </Field>
+
+        <Field label="المجموعة" htmlFor="edit-stgroup">
+          <Select id="edit-stgroup" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+            <option value="">بدون مجموعة</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <ModalActions>
+          <Button type="submit" loading={busy}>
+            حفظ
+          </Button>
+          <Button tone="ghost" onClick={onCancel}>
+            إلغاء
+          </Button>
+        </ModalActions>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Deleting a student takes their answers and their points with them, and there
+ * is no undo. The name has to be typed back to confirm — the button sits next
+ * to «تعديل» on a phone, and a mis-tap should not be able to erase a term's
+ * worth of a student's record.
+ */
+function DeleteStudentDialog({ student, error, onConfirm, onCancel }) {
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => setTyped(''), [student]);
+
+  const matches = student ? typed.trim() === student.full_name.trim() : false;
+
+  return (
+    <Modal
+      open={Boolean(student)}
+      onClose={onCancel}
+      title="حذف الطالب"
+      error={error}
+      size="sm"
+    >
+      {student && (
+        <form
+          className="grid gap-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!matches) return;
+            setBusy(true);
+            await onConfirm();
+            setBusy(false);
+          }}
+        >
+          <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink">
+            سيُحذف <span className="font-bold">{student.full_name}</span> نهائياً مع كل إجاباته
+            ونقاطه وحساب دخوله. لا يمكن التراجع عن هذا.
+          </p>
+          <p className="text-xs text-muted">
+            لإيقاف الطالب مؤقتاً دون فقدان سجلّه، اضغط «نشط» بدلاً من الحذف.
+          </p>
+
+          <Field label="اكتب اسم الطالب للتأكيد" htmlFor="del-stname">
+            <Input
+              id="del-stname"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={student.full_name}
+              autoComplete="off"
+            />
+          </Field>
+
+          <ModalActions>
+            <Button type="submit" tone="danger" loading={busy} disabled={!matches}>
+              حذف نهائياً
+            </Button>
+            <Button tone="ghost" onClick={onCancel}>
+              إلغاء
+            </Button>
+          </ModalActions>
+        </form>
+      )}
+    </Modal>
   );
 }
 

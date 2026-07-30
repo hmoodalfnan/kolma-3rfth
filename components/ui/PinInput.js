@@ -18,13 +18,32 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
   function handleChange(index, raw) {
     // Arabic-Indic digits arrive from an Arabic keyboard and are not matched by
     // \d, so they were silently dropped and nothing appeared to be typed.
-    const digit = toWesternDigits(raw).replace(/\D/g, '').slice(-1);
+    let cleaned = toWesternDigits(raw).replace(/\D/g, '');
+
+    // Typing over a box that already holds a digit leaves both in the field,
+    // and which side the new one lands on depends on where the caret was. Drop
+    // the digit that was already there and whatever remains is the new one —
+    // otherwise correcting the second digit of a code needed a Backspace first,
+    // which nobody guessed.
+    const current = digits[index] === ' ' ? '' : digits[index];
+    if (cleaned.length > 1 && current) {
+      const at = cleaned.indexOf(current);
+      if (at !== -1) cleaned = cleaned.slice(0, at) + cleaned.slice(at + 1);
+    }
+
+    const digit = cleaned.slice(-1);
     if (!digit) return;
 
+    // The code is written left to right with no gaps. A digit aimed past the
+    // first blank box lands in that box instead of leaving a hole behind it —
+    // an iOS keyboard can deliver input to a box the focus rules never let the
+    // reader reach, and the result was a code that looked complete and was not.
+    const target = Math.min(index, firstEmpty());
+
     const next = [...digits];
-    next[index] = digit;
+    next[target] = digit;
     emit(next);
-    if (index < length - 1) refs.current[index + 1]?.focus();
+    if (target < length - 1) refs.current[target + 1]?.focus();
   }
 
   function handleKeyDown(index, event) {
@@ -52,43 +71,69 @@ export function PinInput({ value = '', onChange, length = 6, label = 'الرمز
   }
 
   /**
-   * Tapping the third box of an empty code used to put the caret there and do
-   * nothing useful — the digit typed would land in the middle. An empty code
-   * always starts at the first box. Once something is typed, taps land where
-   * they were aimed so a single digit can be corrected.
+   * The code is entered in order: the next box you may reach is the first blank
+   * one. Tapping the third box of an empty code used to put the caret there and
+   * do nothing useful — the digit typed landed in the middle, leaving a code
+   * that looked six long and was not. Boxes at or before the first blank stay
+   * reachable, so a digit already typed can still be corrected.
    */
-  function handleFocus(index) {
+  function handleFocus(index, event) {
     const target = firstEmpty();
-    if (value.length === 0 && index !== 0) {
-      refs.current[0]?.focus();
-    } else if (index > target && digits[index] === ' ') {
+    if (index > target) {
       refs.current[target]?.focus();
+      return;
     }
+    // A box that already holds a digit is selected on arrival, so the next
+    // keystroke replaces it rather than sitting beside it.
+    event.target.select();
   }
+
+  /**
+   * Taps are turned away before the caret moves at all. Relying on the focus
+   * handler alone worked, but the caret flickered through the box that was
+   * tapped, which reads as "it let me in and then changed its mind".
+   */
+  function handlePointerDown(index, event) {
+    const target = firstEmpty();
+    if (index <= target) return;
+    event.preventDefault();
+    refs.current[target]?.focus();
+  }
+
+  const nextBox = firstEmpty();
 
   return (
     <div className="flex justify-center gap-2" dir="ltr" role="group" aria-label={label}>
-      {digits.map((digit, index) => (
-        <input
-          key={index}
-          ref={(el) => {
-            refs.current[index] = el;
-          }}
-          type="text"
-          role="textbox"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={1}
-          disabled={disabled}
-          aria-label={`${label} - الخانة ${index + 1}`}
-          value={digit.trim()}
-          onChange={(e) => handleChange(index, e.target.value)}
-          onKeyDown={(e) => handleKeyDown(index, e)}
-          onFocus={() => handleFocus(index)}
-          onPaste={handlePaste}
-          className="size-12 rounded-xl border border-line bg-panel text-center text-xl font-bold text-ink outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/25 disabled:opacity-60"
-        />
-      ))}
+      {digits.map((digit, index) => {
+        // Not `disabled`: a disabled box cannot receive a paste, and pasting the
+        // whole code out of a message is how most students enter it.
+        const reachable = index <= nextBox;
+
+        return (
+          <input
+            key={index}
+            ref={(el) => {
+              refs.current[index] = el;
+            }}
+            type="text"
+            role="textbox"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            disabled={disabled}
+            tabIndex={reachable ? 0 : -1}
+            aria-label={`${label} - الخانة ${index + 1}`}
+            value={digit.trim()}
+            onChange={(e) => handleChange(index, e.target.value)}
+            onKeyDown={(e) => handleKeyDown(index, e)}
+            onFocus={(e) => handleFocus(index, e)}
+            onPointerDown={(e) => handlePointerDown(index, e)}
+            onPaste={handlePaste}
+            className={`size-12 rounded-xl border border-line bg-panel text-center text-xl font-bold text-ink outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/25 disabled:opacity-60 ${
+              reachable ? '' : 'opacity-50'
+            }`}
+          />
+        );
+      })}
     </div>
   );
 }

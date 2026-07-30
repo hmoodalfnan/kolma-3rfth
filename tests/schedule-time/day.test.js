@@ -6,6 +6,7 @@ import {
   daysBetween,
   backfillWindow,
   isWithinBackfill,
+  lockReason,
   scheduleDayRange,
 } from '@/lib/schedule-time/day';
 
@@ -101,5 +102,38 @@ describe('scheduleDayRange', () => {
 
   it('returns an empty array for a schedule that has not started', () => {
     expect(scheduleDayRange({ start_date: '2026-09-01', end_date: null }, now)).toEqual([]);
+  });
+});
+
+describe('lockReason', () => {
+  const now = new Date('2026-08-10T09:00:00Z');
+  const live = {
+    status: 'active',
+    start_date: '2026-08-01',
+    end_date: null,
+    backfill_days: 3,
+  };
+
+  it('gives no reason for a day still inside the window', () => {
+    expect(lockReason(live, '2026-08-10', now)).toBe(null);
+    expect(lockReason(live, '2026-08-07', now)).toBe(null);
+  });
+
+  it('calls a day that has not arrived future, not a missed deadline', () => {
+    expect(lockReason(live, '2026-08-11', now)).toBe('future');
+  });
+
+  it('separates before the start from past the backfill window', () => {
+    expect(lockReason(live, '2026-07-31', now)).toBe('before_start');
+    expect(lockReason(live, '2026-08-06', now)).toBe('backfill_closed');
+  });
+
+  it('reports a day after a finished trip as after_end', () => {
+    const ended = { ...live, end_date: '2026-08-05' };
+    expect(lockReason(ended, '2026-08-08', now)).toBe('after_end');
+  });
+
+  it('lets archiving outrank every other reason', () => {
+    expect(lockReason({ ...live, status: 'archived' }, '2026-08-10', now)).toBe('archived');
   });
 });

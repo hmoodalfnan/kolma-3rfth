@@ -158,6 +158,7 @@ describe('database migrations', () => {
       '0015_manager_trip_control.sql',
       '0016_question_sections.sql',
       '0017_question_review_queue.sql',
+      '0018_leave_schedule.sql',
     ]);
   });
 

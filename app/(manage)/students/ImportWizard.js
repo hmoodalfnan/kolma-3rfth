@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Field';
+import { ModalActions } from '@/components/ui/Modal';
 import { ErrorText } from '@/components/manage/Panel';
 import {
   parseStudentWorkbook,
@@ -37,6 +38,7 @@ export function ImportWizard({ groups, scheduleName, onImport, onCancel }) {
   const [progress, setProgress] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [fileName, setFileName] = useState('');
+  const [done, setDone] = useState(null);
 
   // Re-judged on every keystroke, which is what lets a row leave the problem
   // list the moment it is repaired instead of after another upload.
@@ -49,6 +51,7 @@ export function ImportWizard({ groups, scheduleName, onImport, onCancel }) {
   async function handleFile(file) {
     setError('');
     setDrafts(null);
+    setDone(null);
     setOpenRows(new Set());
     setFileName(file.name);
 
@@ -130,8 +133,20 @@ export function ImportWizard({ groups, scheduleName, onImport, onCancel }) {
       }
 
       setProgress(null);
-      setDrafts(null);
-      setFileName('');
+      setDone({ added: created.length, left: blocked.length });
+
+      // Rows that could not go stay on the list so they can be repaired and
+      // sent in a second pass. Clearing them alongside the successful ones was
+      // how a file of two hundred names quietly lost the three that needed
+      // attention.
+      const stuck = new Set(blocked.map((r) => r.id));
+      if (stuck.size > 0) {
+        setDrafts((rows) => rows.filter((r) => stuck.has(r.id)));
+      } else {
+        setDrafts(null);
+        setFileName('');
+      }
+
       return created;
     } catch (err) {
       setError(err.message);
@@ -149,8 +164,52 @@ export function ImportWizard({ groups, scheduleName, onImport, onCancel }) {
     onRemove: () => remove(row.id),
   });
 
+  /**
+   * The import used to finish by silently emptying itself: the dialog went back
+   * to the upload box, and the sheet of login codes it had just produced was
+   * rendered on the page *behind* the dialog, invisible and already counting
+   * down its ten minutes. Nothing said the students had been added at all.
+   */
+  if (done && !drafts) {
+    return (
+      <div className="space-y-4 text-center">
+        <p aria-hidden="true" className="text-5xl">
+          ✅
+        </p>
+        <div>
+          <h3 className="text-lg font-bold text-brand">
+            تمت إضافة {done.added} طالباً إلى {scheduleName}
+          </h3>
+          <p className="mt-1 text-sm text-muted">
+            أُنشئ لكل طالب رمز دخول مؤقت. اعرضه الآن وأرسله لهم — يختفي بعد عشر دقائق، وبعدها
+            يلزم إعادة تعيين الرمز.
+          </p>
+        </div>
+
+        <ModalActions>
+          <Button onClick={onCancel}>عرض رموز الدخول</Button>
+          <Button
+            tone="ghost"
+            onClick={() => {
+              setDone(null);
+              setFileName('');
+            }}
+          >
+            استيراد ملف آخر
+          </Button>
+        </ModalActions>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {done && (
+        <p className="rounded-xl bg-ok px-3 py-2 text-sm font-semibold text-ok-ink">
+          تمت إضافة {done.added} طالباً. بقي {done.left} صفاً به مشاكل — أصلحه ثم أضفه، أو احذفه.
+        </p>
+      )}
+
       {/* Step one is the template. Most failed imports were a missing or
           misspelled header, which a prepared file makes impossible. */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-line p-3">
@@ -228,7 +287,11 @@ export function ImportWizard({ groups, scheduleName, onImport, onCancel }) {
               : 'راجع الأسماء قبل التأكيد.'}
           </p>
 
-          <ul className="max-h-[26rem] space-y-1.5 overflow-y-auto rounded-2xl border border-line p-2">
+          {/* One scroll container, not two. A capped list inside a dialog that
+              also scrolls meant a phone had to guess which of them a drag was
+              aimed at; the dialog body already scrolls, so on a phone this list
+              simply runs down it. */}
+          <ul className="space-y-1.5 rounded-2xl border border-line p-2 sm:max-h-[26rem] sm:overflow-y-auto">
             {reviewed.map((row) => (
               <DraftRow key={row.id} {...rowProps(row)} />
             ))}
@@ -240,7 +303,9 @@ export function ImportWizard({ groups, scheduleName, onImport, onCancel }) {
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Sticks to the bottom of the dialog, so «إضافة» is reachable without
+              scrolling past two hundred names to find it. */}
+          <ModalActions>
             <Button disabled={importable.length === 0 || Boolean(progress)} onClick={confirm}>
               إضافة {importable.length} طالباً
             </Button>
@@ -248,11 +313,11 @@ export function ImportWizard({ groups, scheduleName, onImport, onCancel }) {
               إلغاء
             </Button>
             {blocked.length > 0 && (
-              <span className="text-xs font-semibold text-danger-ink">
+              <span className="self-center text-xs font-semibold text-danger-ink">
                 {blocked.length} صفاً سيُترك خلفك.
               </span>
             )}
-          </div>
+          </ModalActions>
         </div>
       )}
     </div>
@@ -284,42 +349,53 @@ function DraftRow({ row, groups, open, onToggle, onChange, onRemove }) {
 
   return (
     <li className={`rounded-xl border p-2.5 ${ROW_TONES[tone]}`}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span aria-hidden="true">{mark}</span>
-        <span className="shrink-0 text-[11px] tabular-nums text-muted">صف {row.rowNumber}</span>
-        <span className="min-w-0 flex-1 truncate font-semibold">
-          {row.full_name || <span className="text-muted">بدون اسم</span>}
+      {/* The name, the row number, the group, the phone and two buttons all
+          shared one wrapping line. On a phone that left the name about forty
+          pixels wide — «أحمـ…» — which is precisely the thing being reviewed.
+          The name now owns a column of its own and everything else is beneath
+          it, so nothing has to be clipped. */}
+      <div className="flex items-start gap-2">
+        <span aria-hidden="true" className="leading-6">
+          {mark}
         </span>
 
-        {row.group_name && (
-          <span className="rounded-full bg-chip px-2 py-0.5 text-[11px] text-muted">
-            {row.group_name}
-          </span>
-        )}
-        {row.phone && (
-          <span dir="ltr" className="text-[11px] text-muted">
-            {row.phone}
-          </span>
-        )}
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold break-words">
+            {row.full_name || <span className="text-muted">بدون اسم</span>}
+          </p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
+            <span className="tabular-nums">صف {row.rowNumber}</span>
+            {row.group_name && (
+              <span className="rounded-full bg-chip px-2 py-0.5">{row.group_name}</span>
+            )}
+            {row.phone && (
+              <span dir="ltr" className="tabular-nums">
+                {row.phone}
+              </span>
+            )}
+          </p>
+        </div>
 
-        <Button
-          tone="outline"
-          className="min-h-0 shrink-0 px-3 py-1.5 text-xs"
-          aria-expanded={open}
-          onClick={onToggle}
-        >
-          {open ? 'تم' : row.errors.length ? 'إصلاح' : 'تعديل'}
-        </Button>
-        {/* Outline, not ghost: a bare-text control next to a bordered one reads
-            as a caption rather than something you can press. */}
-        <Button
-          tone="outline"
-          className="min-h-0 shrink-0 px-3 py-1.5 text-xs text-danger-ink"
-          onClick={onRemove}
-          aria-label={`حذف ${row.full_name || `الصف ${row.rowNumber}`} من الاستيراد`}
-        >
-          حذف
-        </Button>
+        <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
+          <Button
+            tone="outline"
+            className="min-h-0 px-3 py-1.5 text-xs"
+            aria-expanded={open}
+            onClick={onToggle}
+          >
+            {open ? 'تم' : row.errors.length ? 'إصلاح' : 'تعديل'}
+          </Button>
+          {/* Outline, not ghost: a bare-text control next to a bordered one reads
+              as a caption rather than something you can press. */}
+          <Button
+            tone="outline"
+            className="min-h-0 px-3 py-1.5 text-xs text-danger-ink"
+            onClick={onRemove}
+            aria-label={`حذف ${row.full_name || `الصف ${row.rowNumber}`} من الاستيراد`}
+          >
+            حذف
+          </Button>
+        </div>
       </div>
 
       {(row.errors.length > 0 || row.warnings.length > 0) && (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Select } from '@/components/ui/Field';
 import { SkeletonList } from '@/components/ui/Skeleton';
@@ -111,6 +111,9 @@ function ScheduleForm({ open, initial, title, submitLabel = 'حفظ', error, onS
   const [openEnded, setOpenEnded] = useState(true);
   const [end, setEnd] = useState('');
   const [busy, setBusy] = useState(false);
+  // Three of these are mounted at once — create, edit, clone. Fixed ids meant
+  // three fields called "sname", and every label pointed at the first of them.
+  const uid = useId();
 
   // Seed from `initial` each time it opens rather than at mount: the component
   // stays mounted between openings now that it is a modal.
@@ -142,13 +145,13 @@ function ScheduleForm({ open, initial, title, submitLabel = 'حفظ', error, onS
           setBusy(false);
         }}
       >
-        <Field label="اسم الرحلة" htmlFor="sname">
-          <Input id="sname" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Field label="اسم الرحلة" htmlFor={`${uid}-name`}>
+          <Input id={`${uid}-name`} value={name} onChange={(e) => setName(e.target.value)} required />
         </Field>
 
-        <Field label="تاريخ البداية" htmlFor="sstart">
+        <Field label="تاريخ البداية" htmlFor={`${uid}-start`}>
           <Input
-            id="sstart"
+            id={`${uid}-start`}
             type="date"
             value={start}
             onChange={(e) => setStart(e.target.value)}
@@ -167,9 +170,9 @@ function ScheduleForm({ open, initial, title, submitLabel = 'حفظ', error, onS
         </label>
 
         {!openEnded && (
-          <Field label="تاريخ النهاية" htmlFor="send">
+          <Field label="تاريخ النهاية" htmlFor={`${uid}-end`}>
             <Input
-              id="send"
+              id={`${uid}-end`}
               type="date"
               value={end}
               min={start}
@@ -196,24 +199,51 @@ function ScheduleSettings({ schedule, onChanged }) {
   const [row, setRow] = useState(schedule);
   const [error, setError] = useTransientError();
   const [cloning, setCloning] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => setRow(schedule), [schedule]);
 
+  /** Resolves to whether the write landed, so callers can keep a dialog open on failure. */
   async function patch(values) {
     const before = row;
     setRow({ ...row, ...values }); // optimistic
     try {
       await updateSchedule(schedule.id, values);
       onChanged();
+      return true;
     } catch (err) {
       setRow(before);
       setError(err.message);
+      return false;
     }
   }
 
   return (
-    <Panel title={`إعدادات: ${schedule.name}`}>
+    <Panel
+      title={`إعدادات: ${schedule.name}`}
+      action={
+        <Button tone="outline" onClick={() => setEditing(true)}>
+          تعديل الاسم والتاريخ
+        </Button>
+      }
+    >
       <ErrorText>{error}</ErrorText>
+
+      {/* The name and the dates were fixed at creation, so a typo in either
+          meant cloning the trip and abandoning the original. */}
+      <ScheduleForm
+        open={editing}
+        error={error}
+        title="تعديل بيانات الرحلة"
+        submitLabel="حفظ"
+        initial={row}
+        onCancel={() => setEditing(false)}
+        onSubmit={async (values) => {
+          if (!(await patch(values))) return;
+          setEditing(false);
+          toast.push('تم حفظ بيانات الرحلة', 'success');
+        }}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         {/* A slider needed a precise drag to land on a round number, and saved
@@ -385,7 +415,7 @@ function GroupsPanel({ schedule }) {
 
   return (
     <Panel
-      title="المجموعات (الغرف)"
+      title="المجموعات"
       action={<Button onClick={() => setCreating(true)}>مجموعة جديدة</Button>}
     >
       <ErrorText>{error}</ErrorText>
@@ -451,7 +481,9 @@ function GroupsPanel({ schedule }) {
             <li key={g.id} className="rounded-xl border border-line p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold">مجموعة: {g.name}</span>
+                  {/* Names run long — «مجموعة: الفصل الأول أ» clipped to a few
+                      letters told nobody which group the row was. */}
+                  <span className="block font-semibold break-words">مجموعة: {g.name}</span>
                   <span className="block text-xs text-muted">
                     {students.filter((st) => st.group_id === g.id).length} طالب
                   </span>
@@ -489,6 +521,8 @@ function GroupsPanel({ schedule }) {
 function GroupForm({ open, title, initialName, submitLabel = 'حفظ', error, onSubmit, onCancel }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  // Two are mounted at once — create and rename — so the id cannot be fixed.
+  const gid = useId();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -508,8 +542,8 @@ function GroupForm({ open, title, initialName, submitLabel = 'حفظ', error, on
           setBusy(false);
         }}
       >
-        <Field label="اسم المجموعة" htmlFor="gname" hint="مثل: غرفة 101">
-          <Input id="gname" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Field label="اسم المجموعة" htmlFor={`${gid}-name`} hint="مثل: غرفة 101">
+          <Input id={`${gid}-name`} value={name} onChange={(e) => setName(e.target.value)} required />
         </Field>
 
         <ModalActions>
