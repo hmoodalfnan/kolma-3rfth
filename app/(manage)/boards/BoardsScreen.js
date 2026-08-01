@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Select } from '@/components/ui/Field';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
-import { BoardTable, RankBadge } from '@/components/boards/BoardTable';
+import { BoardTable, RankBadge, StudentName } from '@/components/boards/BoardTable';
 import { PerQuestionBoard } from './PerQuestionBoard';
 import { StudentBreakdown } from '@/components/boards/StudentBreakdown';
 import { getBrowserClient } from '@/lib/supabase/browser';
@@ -55,6 +55,7 @@ export function BoardsScreen() {
 function OverallBoard({ schedule, onError }) {
   const [rows, setRows] = useState(null);
   const [open, setOpen] = useState(null);
+  const blur = schedule.blur_leaderboard_names;
 
   useEffect(() => {
     let alive = true;
@@ -80,7 +81,11 @@ function OverallBoard({ schedule, onError }) {
     >
       <RankBadge rank={row.rank} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-semibold">{row.full_name}</span>
+        <StudentName
+          name={row.full_name}
+          blurred={blur}
+          className="block truncate font-semibold"
+        />
         <span className="block text-xs text-muted">
           {row.group_name ?? 'بدون مجموعة'} · بنود {Number(row.answer_points)} · تقييم{' '}
           {Number(row.grant_points)}
@@ -114,7 +119,7 @@ function OverallBoard({ schedule, onError }) {
                 onClick={() => setOpen(r)}
                 className="font-semibold underline decoration-dotted underline-offset-4 hover:text-brand"
               >
-                {r.full_name}
+                <StudentName name={r.full_name} blurred={blur} />
               </button>
             ),
           },
@@ -143,6 +148,7 @@ function GroupsBoard({ schedule, onError }) {
   const [students, setStudents] = useState([]);
   const [open, setOpen] = useState(null);
   const [detail, setDetail] = useState(null);
+  const blur = schedule.blur_leaderboard_names;
 
   useEffect(() => {
     let alive = true;
@@ -249,7 +255,11 @@ function GroupsBoard({ schedule, onError }) {
                           onClick={() => setDetail(s)}
                           className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-right hover:bg-chip"
                         >
-                          <span className="min-w-0 truncate">{s.full_name}</span>
+                          <StudentName
+                            name={s.full_name}
+                            blurred={blur}
+                            className="min-w-0 truncate"
+                          />
                           <span className="flex shrink-0 items-center gap-2">
                             <span className="font-semibold tabular-nums">
                               {Number(s.total_points)}

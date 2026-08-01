@@ -41,7 +41,9 @@ async function postHandler(request) {
 
   const { data: source } = await db
     .from('schedules')
-    .select('streak_threshold_pct, backfill_days, students_see_leaderboard, timezone')
+    .select(
+      'streak_threshold_pct, backfill_days, students_see_leaderboard, blur_leaderboard_names, timezone',
+    )
     .eq('id', scheduleId)
     .maybeSingle();
 
@@ -58,6 +60,7 @@ async function postHandler(request) {
       streak_threshold_pct: source.streak_threshold_pct,
       backfill_days: source.backfill_days,
       students_see_leaderboard: source.students_see_leaderboard,
+      blur_leaderboard_names: source.blur_leaderboard_names,
       created_by: profile.id,
     })
     .select('id')

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
+import { StudentName } from '@/components/boards/BoardTable';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/manage/Panel';
 import { getBrowserClient } from '@/lib/supabase/browser';
@@ -64,7 +65,11 @@ export function StudentBreakdown({ student, schedule, onClose }) {
     <Modal
       open={Boolean(student)}
       onClose={onClose}
-      title={student?.full_name}
+      title={
+        student ? (
+          <StudentName name={student.full_name} blurred={schedule?.blur_leaderboard_names} />
+        ) : undefined
+      }
       description={
         student
           ? `مجموعة: ${student.group_name ?? 'بدون مجموعة'} · الإجمالي ${Number(student.total_points)} نقطة`

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal, ModalActions } from '@/components/ui/Modal';
 import { Panel, EmptyState } from '@/components/manage/Panel';
-import { BoardTable, RankBadge } from '@/components/boards/BoardTable';
+import { BoardTable, RankBadge, StudentName } from '@/components/boards/BoardTable';
 import { getBrowserClient } from '@/lib/supabase/browser';
 import { fetchStudentTotals, fetchQuestionLeaders, rankRows } from '@/lib/boards/queries';
 import { listQuestions } from '@/lib/manage/api';
@@ -27,6 +27,7 @@ export function PerQuestionBoard({ schedule, onError }) {
   const [rows, setRows] = useState(null);
   const [students, setStudents] = useState([]);
   const [picking, setPicking] = useState(false);
+  const blur = schedule.blur_leaderboard_names;
 
   useEffect(() => {
     let alive = true;
@@ -197,9 +198,11 @@ export function PerQuestionBoard({ schedule, onError }) {
           <div className="flex items-center gap-3 rounded-xl border border-line p-3">
             <RankBadge rank={r.rank} />
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-semibold">
-                {nameOf(r.student_id)?.full_name ?? '—'}
-              </span>
+              <StudentName
+                name={nameOf(r.student_id)?.full_name ?? '—'}
+                blurred={blur}
+                className="block truncate font-semibold"
+              />
               <span className="block truncate text-xs text-muted">
                 مجموعة: {nameOf(r.student_id)?.group_name ?? 'بدون مجموعة'} · التزم{' '}
                 {r.times_completed} مرة
@@ -216,7 +219,11 @@ export function PerQuestionBoard({ schedule, onError }) {
             key: 'student',
             label: 'الطالب',
             render: (r) => (
-              <span className="font-semibold">{nameOf(r.student_id)?.full_name ?? '—'}</span>
+              <StudentName
+                name={nameOf(r.student_id)?.full_name ?? '—'}
+                blurred={blur}
+                className="font-semibold"
+              />
             ),
           },
           {

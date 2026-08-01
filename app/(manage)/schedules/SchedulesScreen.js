@@ -297,6 +297,19 @@ function ScheduleSettings({ schedule, onChanged }) {
           إظهار لوحة الصدارة للطلاب
         </label>
 
+        {/* For showing the board to a room without putting names on display.
+            Blurs every name across the manager leaderboard and the detail popup;
+            off reveals them all. Shared by everyone who runs the trip. */}
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <input
+            type="checkbox"
+            checked={row.blur_leaderboard_names ?? false}
+            onChange={(e) => patch({ blur_leaderboard_names: e.target.checked })}
+            className="size-5 accent-[color:var(--color-accent)]"
+          />
+          إخفاء أسماء الطلاب في لوحة الصدارة
+        </label>
+
         <div className="flex flex-wrap items-end gap-2">
           <Button
             tone="outline"

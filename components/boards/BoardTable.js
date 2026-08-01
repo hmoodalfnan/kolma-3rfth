@@ -17,6 +17,30 @@ export function RankBadge({ rank }) {
 }
 
 /**
+ * A student's name on the boards, optionally screened.
+ *
+ * When a trip has «إخفاء الأسماء» on, every name across the leaderboards — and the
+ * one in the breakdown popup — is blurred so the board can be shown to a room
+ * without exposing who sits where. It is a visual screen, not a secret: the name
+ * is still in the DOM. Turning the trip setting off reveals every name at once.
+ *
+ * `className` carries the layout the name needs where it sits (`block truncate`,
+ * `font-semibold`, …); the blur is appended on top so truncation still works.
+ */
+export function StudentName({ name, blurred, className = '' }) {
+  if (!blurred) return <span className={className}>{name}</span>;
+  return (
+    <span
+      className={`${className} select-none blur-[5px]`}
+      aria-label="الاسم مخفي"
+      title="الأسماء مخفية — عطّل الإخفاء من إعدادات الرحلة"
+    >
+      {name}
+    </span>
+  );
+}
+
+/**
  * Sortable table shared by every leaderboard.
  * `columns` is `[{ key, label, align, render, sortable }]`.
  *
