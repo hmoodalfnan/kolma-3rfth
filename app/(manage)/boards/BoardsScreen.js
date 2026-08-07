@@ -9,6 +9,7 @@ import { StudentBreakdown } from '@/components/boards/StudentBreakdown';
 import { getBrowserClient } from '@/lib/supabase/browser';
 import { useSchedule } from '@/lib/manage/useSchedule';
 import { fetchStudentTotals, fetchGroupTotals, fetchQuestionLeaders, rankRows } from '@/lib/boards/queries';
+import { buildGroupRows, UNGROUPED } from '@/lib/boards/group-metrics';
 import { listQuestions } from '@/lib/manage/api';
 import { useTransientError } from '@/lib/ui/useTransientError';
 
@@ -141,13 +142,12 @@ function OverallBoard({ schedule, onError }) {
   );
 }
 
-const UNGROUPED = '__ungrouped__';
-
 function GroupsBoard({ schedule, onError }) {
   const [rows, setRows] = useState(null);
   const [students, setStudents] = useState([]);
   const [open, setOpen] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [metric, setMetric] = useState('avg_points'); // fair default
   const blur = schedule.blur_leaderboard_names;
 
   useEffect(() => {
@@ -175,40 +175,44 @@ function GroupsBoard({ schedule, onError }) {
 
   // Students with no group are invisible to v_group_totals, which groups by
   // group_id — so a whole bucket of people simply did not appear anywhere on
-  // this screen. They are folded in as a pseudo-group, ranked alongside the
-  // real ones but marked as not being one.
-  const withUngrouped = useMemo(() => {
+  // this screen. The helper folds them in as a pseudo-group and ranks by the
+  // chosen metric (average by default, so bigger groups do not win by size).
+  const groupRows = useMemo(() => {
     if (!rows) return null;
+    return buildGroupRows({ groups: rows, students, metric });
+  }, [rows, students, metric]);
 
-    const loose = students.filter((s) => !s.group_id);
-    if (loose.length === 0) return rows;
-
-    const total = loose.reduce((sum, s) => sum + Number(s.total_points), 0);
-    const bucket = {
-      group_id: UNGROUPED,
-      group_name: 'بدون مجموعة',
-      member_count: loose.length,
-      total_points: total,
-      group_points: 0,
-      avg_points: Math.round((total / loose.length) * 10) / 10,
-    };
-
-    return rankRows(
-      [...rows, bucket].sort((a, b) => Number(b.total_points) - Number(a.total_points)),
-    );
-  }, [rows, students]);
-
-  const best = withUngrouped?.[0]?.total_points ? Number(withUngrouped[0].total_points) : 1;
+  const best = groupRows?.[0] ? Number(groupRows[0][metric]) || 1 : 1;
 
   return (
     <Panel title="ترتيب المجموعات">
-      {withUngrouped === null ? (
+      <div className="mb-3 flex items-center gap-2 text-sm">
+        <span className="text-muted">ترتيب حسب:</span>
+        {[
+          { id: 'avg_points', label: 'المعدل' },
+          { id: 'total_points', label: 'الإجمالي' },
+        ].map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => setMetric(m.id)}
+            aria-pressed={metric === m.id}
+            className={`rounded-lg px-3 py-1.5 font-semibold ${
+              metric === m.id ? 'bg-accent text-accent-ink' : 'chip'
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {groupRows === null ? (
         <BoardTable loading rows={[]} columns={[]} />
-      ) : withUngrouped.length === 0 ? (
+      ) : groupRows.length === 0 ? (
         <EmptyState>لا توجد مجموعات ولا طلاب.</EmptyState>
       ) : (
         <ul className="space-y-2">
-          {withUngrouped.map((g) => (
+          {groupRows.map((g) => (
             <li key={g.group_id} className="rounded-xl border border-line p-3">
               <button
                 type="button"
@@ -226,18 +230,18 @@ function GroupsBoard({ schedule, onError }) {
                     )}
                   </span>
                   <span className="block text-xs text-muted">
-                    {g.member_count} طالب · معدل {Number(g.avg_points)} · نقاط جماعية{' '}
-                    {Number(g.group_points)}
+                    {g.member_count} طالب · معدل {Number(g.avg_points)} · الإجمالي{' '}
+                    {Number(g.total_points)} · نقاط جماعية {Number(g.group_points)}
                   </span>
                   <span className="mt-1.5 block h-2 rounded-full bg-line" aria-hidden="true">
                     <span
                       className="block h-full rounded-full bg-gold-500"
-                      style={{ width: `${Math.max(2, (Number(g.total_points) / best) * 100)}%` }}
+                      style={{ width: `${Math.max(2, (Number(g[metric]) / best) * 100)}%` }}
                     />
                   </span>
                 </span>
                 <span className="font-bold tabular-nums text-brand" dir="ltr">
-                  {Number(g.total_points)}
+                  {Number(g[metric])}
                 </span>
               </button>
 
