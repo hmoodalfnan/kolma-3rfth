@@ -3,16 +3,19 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useStudentContext } from '@/lib/student/useStudentContext';
+import { useUnreadNotifications } from '@/lib/student/useUnreadNotifications';
 
 const ITEMS = [
   { href: '/today', label: 'اليوم', icon: '✓' },
   { href: '/board', label: 'الصدارة', icon: '★', needsBoard: true },
+  { href: '/notifications', label: 'التنبيهات', icon: '🔔', badge: true },
   { href: '/settings', label: 'الإعدادات', icon: '⚙' },
 ];
 
 export function StudentNav() {
   const pathname = usePathname();
   const ctx = useStudentContext();
+  const { count } = useUnreadNotifications();
 
   // A trip can switch the leaderboard off for students. Linking to a page that
   // will refuse to show anything is worse than not offering it. The tab is only
@@ -41,8 +44,13 @@ export function StudentNav() {
                   active ? 'text-brand' : 'text-muted'
                 }`}
               >
-                <span className="text-lg leading-none" aria-hidden="true">
+                <span className="relative text-lg leading-none" aria-hidden="true">
                   {item.icon}
+                  {item.badge && count > 0 && (
+                    <span className="absolute -end-2 -top-1 min-w-4 rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-4 text-white">
+                      {count > 9 ? '9+' : count}
+                    </span>
+                  )}
                 </span>
                 {item.label}
               </Link>
