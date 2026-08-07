@@ -18,6 +18,7 @@ describe('canAccess', () => {
   it('keeps a student inside the student area', () => {
     expect(canAccess('student', '/today')).toBe(true);
     expect(canAccess('student', '/board')).toBe(true);
+    expect(canAccess('student', '/notifications')).toBe(true);
     expect(canAccess('student', '/schedules')).toBe(false);
     expect(canAccess('student', '/admin/global-log')).toBe(false);
   });
