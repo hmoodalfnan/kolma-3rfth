@@ -160,6 +160,7 @@ describe('database migrations', () => {
       '0017_question_review_queue.sql',
       '0018_leave_schedule.sql',
       '0019_grant_entry_date.sql',
+      '0020_blur_leaderboard_names.sql',
     ]);
   });
 

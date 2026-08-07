@@ -123,11 +123,18 @@ export function GradingScreen() {
   if (!current) return <EmptyState>اختر رحلة أولاً.</EmptyState>;
   if (criteria === null) return <SkeletonList rows={8} className="h-20" />;
 
-  const submit = async (payload) => {
+  const submit = async (payload, roster = []) => {
     try {
-      await grantPoints({ scheduleId: current.id, ...payload });
+      const res = await grantPoints({ scheduleId: current.id, ...payload });
       await load();
-      toast.push('تم تسجيل النقاط', 'success');
+      if (res?.failed?.length) {
+        const names = res.failed
+          .map((f) => roster.find((s) => s.id === f.studentId)?.full_name ?? 'طالب')
+          .join('، ');
+        toast.push(`تعذّر تسجيل النقاط لـ: ${names}`, 'error');
+      } else {
+        toast.push('تم تسجيل النقاط', 'success');
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -142,6 +149,7 @@ export function GradingScreen() {
       <div className="grid gap-4 lg:grid-cols-2">
         <GrantForm
           title="تقييم طالب"
+          multiTarget
           schedule={current}
           criteria={criteria}
           targets={students.map((s) => ({
@@ -149,14 +157,20 @@ export function GradingScreen() {
             label: `${s.full_name} — مجموعة: ${groups.find((g) => g.id === s.group_id)?.name ?? 'بدون مجموعة'}`,
           }))}
           emptyLabel="لا يوجد طلاب نشطون."
-          onSubmit={(criterionId, points, note, targetId, _members, entryDate) =>
-            submit({
-              criterionId,
-              points,
-              note,
-              entryDate,
-              target: { kind: 'student', studentId: targetId },
-            })
+          onSubmit={(criterionId, points, note, ids, _members, entryDate) =>
+            submit(
+              {
+                criterionId,
+                points,
+                note,
+                entryDate,
+                target:
+                  ids.length === 1
+                    ? { kind: 'student', studentId: ids[0] }
+                    : { kind: 'students', studentIds: ids },
+              },
+              students,
+            )
           }
         />
 
@@ -274,11 +288,14 @@ function GrantForm({
   targets,
   emptyLabel,
   onSubmit,
+  multiTarget = false,
   showApplyToMembers = false,
   memberCount,
 }) {
   const [entryDate, setEntryDate] = useState(() => todayInRiyadh());
   const [targetId, setTargetId] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [filter, setFilter] = useState('');
   const [criterionId, setCriterionId] = useState(criteria[0]?.id ?? '');
   const [points, setPoints] = useState(5);
   const [note, setNote] = useState('');
@@ -286,13 +303,18 @@ function GrantForm({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!targetId && targets[0]) setTargetId(targets[0].id);
-  }, [targets, targetId]);
+    if (!multiTarget && !targetId && targets[0]) setTargetId(targets[0].id);
+  }, [multiTarget, targets, targetId]);
 
   const criterion = useMemo(
     () => criteria.find((c) => c.id === criterionId),
     [criteria, criterionId],
   );
+
+  const visibleTargets = useMemo(() => {
+    const q = filter.trim();
+    return q ? targets.filter((t) => t.label.includes(q)) : targets;
+  }, [targets, filter]);
 
   if (targets.length === 0) {
     return (
@@ -306,11 +328,20 @@ function GrantForm({
     const value = Number(points);
     if (!value) return;
 
-    setBusy(true);
     // The sign is carried by the value the user picked, so a criterion that
     // forbids deductions clamps rather than silently flipping it.
     const signed = criterion?.allow_negative ? value : Math.abs(value);
-    await onSubmit(criterionId, signed, note, targetId, applyToMembers, entryDate);
+
+    setBusy(true);
+    if (multiTarget) {
+      if (selectedIds.length === 0) {
+        setBusy(false);
+        return;
+      }
+      await onSubmit(criterionId, signed, note, selectedIds, applyToMembers, entryDate);
+    } else {
+      await onSubmit(criterionId, signed, note, targetId, applyToMembers, entryDate);
+    }
     setNote('');
     setBusy(false);
   };
@@ -325,19 +356,73 @@ function GrantForm({
           onChange={setEntryDate}
         />
 
-        <Field label="الهدف" htmlFor={`${title}-target`}>
-          <Select
-            id={`${title}-target`}
-            value={targetId}
-            onChange={(e) => setTargetId(e.target.value)}
-          >
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {multiTarget ? (
+          <Field label="الطلاب" htmlFor={`${title}-filter`}>
+            <div className="space-y-2">
+              <Input
+                id={`${title}-filter`}
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="ابحث بالاسم…"
+              />
+              <div className="flex items-center justify-between text-xs text-muted">
+                <span>{selectedIds.length} طلاب محدّدين</span>
+                <span className="flex gap-2">
+                  <button
+                    type="button"
+                    className="font-semibold text-brand"
+                    onClick={() => setSelectedIds(visibleTargets.map((t) => t.id))}
+                  >
+                    تحديد الكل
+                  </button>
+                  <button
+                    type="button"
+                    className="font-semibold text-muted"
+                    onClick={() => setSelectedIds([])}
+                  >
+                    إلغاء التحديد
+                  </button>
+                </span>
+              </div>
+              <ul className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-line p-2">
+                {visibleTargets.map((t) => {
+                  const on = selectedIds.includes(t.id);
+                  return (
+                    <li key={t.id}>
+                      <label className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-chip">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={(e) =>
+                            setSelectedIds((ids) =>
+                              e.target.checked ? [...ids, t.id] : ids.filter((x) => x !== t.id),
+                            )
+                          }
+                          className="size-5 accent-[color:var(--color-accent)]"
+                        />
+                        <span className="min-w-0 truncate">{t.label}</span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </Field>
+        ) : (
+          <Field label="الهدف" htmlFor={`${title}-target`}>
+            <Select
+              id={`${title}-target`}
+              value={targetId}
+              onChange={(e) => setTargetId(e.target.value)}
+            >
+              {targets.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         <Field label="بند التقييم" htmlFor={`${title}-crit`}>
           <Select
@@ -428,13 +513,18 @@ function GrantForm({
 
         <Button
           loading={busy}
-          disabled={!Number(points)}
+          disabled={multiTarget ? selectedIds.length === 0 || !Number(points) : !Number(points)}
           tone={Number(points) < 0 ? 'danger' : 'primary'}
           onClick={run}
         >
-          {Number(points) < 0
-            ? `خصم ${Math.abs(Number(points))} نقطة`
-            : `منح ${Number(points) || 0} نقطة`}
+          {(() => {
+            const n = Math.abs(Number(points)) || 0;
+            const who = `${selectedIds.length} طلاب`;
+            if (Number(points) < 0) {
+              return multiTarget ? `خصم ${n} نقطة من ${who}` : `خصم ${n} نقطة`;
+            }
+            return multiTarget ? `منح ${n} نقطة لـ ${who}` : `منح ${Number(points) || 0} نقطة`;
+          })()}
         </Button>
       </div>
     </Panel>
