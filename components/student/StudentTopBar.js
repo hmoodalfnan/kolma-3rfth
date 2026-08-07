@@ -10,7 +10,7 @@ import { useUnreadNotifications } from '@/lib/student/useUnreadNotifications';
  */
 export function StudentTopBar() {
   const pathname = usePathname();
-  const { count } = useUnreadNotifications();
+  const { count, markAllSeen } = useUnreadNotifications();
   const active = pathname === '/notifications';
 
   return (
@@ -18,6 +18,7 @@ export function StudentTopBar() {
       <Link
         href="/notifications"
         prefetch
+        onClick={() => markAllSeen()}
         aria-label={count > 0 ? `التنبيهات، ${count} غير مقروء` : 'التنبيهات'}
         aria-current={active ? 'page' : undefined}
         className={`relative flex size-10 items-center justify-center rounded-full border border-line text-lg transition ${
