@@ -3,6 +3,7 @@ import { requireStaff, staffsSchedule } from '@/lib/http/guard';
 import { clientIp, userAgent, jsonResponse as json } from '@/lib/http/request-context';
 import { writeAudit } from '@/lib/audit/write';
 import { grantSchema } from '@/lib/validation/grants';
+import { summarizeGrants } from '@/lib/grants/batch';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,6 +42,48 @@ async function postHandler(request) {
   }
 
   // The RPCs run as definer and re-check authorization internally.
+  if (target.kind === 'students') {
+    const outcomes = [];
+    for (const studentId of target.studentIds) {
+      const { data, error } = await scoped.rpc('grant_student_points', {
+        p_schedule: scheduleId,
+        p_student: studentId,
+        p_criterion: criterionId,
+        p_points: points,
+        p_note: note,
+        p_entry_date: entryDate ?? null,
+      });
+      outcomes.push({ studentId, id: data ?? null, error: error?.message ?? null });
+    }
+
+    const { ids, failed } = summarizeGrants(outcomes);
+
+    // One audit row per student who actually took the points, so the trail
+    // matches the single-student path rather than lumping a batch together.
+    for (const o of outcomes) {
+      if (!o.id) continue;
+      await writeAudit(db, {
+        actorLabel: profile.username,
+        actorRole: profile.role,
+        scheduleId,
+        entityType: 'point_event',
+        entityId: o.id,
+        action: 'grant',
+        after: {
+          criterion: criterion.name,
+          points,
+          note,
+          target: { kind: 'student', studentId: o.studentId },
+          entryDate: entryDate ?? null,
+        },
+        ip: clientIp(request),
+        userAgent: userAgent(request),
+      });
+    }
+
+    return json({ ids, failed }, 200);
+  }
+
   const rpc =
     target.kind === 'student'
       ? scoped.rpc('grant_student_points', {
