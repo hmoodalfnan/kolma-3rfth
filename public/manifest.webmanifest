@@ -1,6 +1,6 @@
 {
-  "name": "المتابع الإيماني",
-  "short_name": "سجل",
+  "name": "كلّما عرفته",
+  "short_name": "كلّما",
   "description": "متابعة الأعمال الإيمانية والسلوكية",
   "start_url": "/today",
   "scope": "/",
@@ -9,8 +9,8 @@
   "orientation": "portrait",
   "lang": "ar",
   "dir": "rtl",
-  "background_color": "#F7F8FB",
-  "theme_color": "#2A3563",
+  "background_color": "#F4F1E8",
+  "theme_color": "#1b4332",
   "categories": ["education", "lifestyle"],
   "icons": [
     {

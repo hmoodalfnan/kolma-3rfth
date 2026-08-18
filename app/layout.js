@@ -11,10 +11,10 @@ const arabic = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata = {
-  title: 'المتابع الإيماني',
-  description: 'متابعة الأعمال الإيمانية والسلوكية',
+  title: 'كلّما عرفته',
+  description: 'متابعة الأعمال اليومية والمهام',
   manifest: '/manifest.webmanifest',
-  applicationName: 'المتابع الإيماني',
+  applicationName: 'كلّما عرفته',
   icons: {
     icon: [
       { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
@@ -25,7 +25,7 @@ export const metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: 'المتابع الإيماني',
+    title: 'كلّما عرفته',
     statusBarStyle: 'black-translucent',
   },
   formatDetection: { telephone: false },
@@ -39,8 +39,8 @@ export const dynamic = 'force-dynamic';
 
 export const viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#2A3563' },
-    { media: '(prefers-color-scheme: dark)', color: '#141A33' },
+    { media: '(prefers-color-scheme: light)', color: '#1b4332' },
+    { media: '(prefers-color-scheme: dark)', color: '#0c1610' },
   ],
   width: 'device-width',
   initialScale: 1,

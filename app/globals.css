@@ -3,37 +3,40 @@
 @theme {
   --font-sans: var(--font-arabic), system-ui, sans-serif;
 
-  --color-navy-50: #eef0f7;
-  --color-navy-100: #d6dbec;
-  --color-navy-200: #b7c0e0;
-  --color-navy-300: #8f9ac4;
-  --color-navy-500: #4a5691;
-  --color-navy-600: #37427a;
-  --color-navy-700: #2a3563;
-  --color-navy-800: #1f2749;
-  --color-navy-900: #141a33;
+  /* Brand green scale (from logo.jpg / post.jpg). The `navy-*` names are kept so
+     existing utilities re-skin without touching every component; the values are
+     now forest→emerald green. */
+  --color-navy-50: #eaf2ec;
+  --color-navy-100: #cfe3d5;
+  --color-navy-200: #a9cbb4;
+  --color-navy-300: #7fb094;
+  --color-navy-500: #3f8a5f;
+  --color-navy-600: #2d6a4f;
+  --color-navy-700: #1b4332;
+  --color-navy-800: #143728;
+  --color-navy-900: #0d2a1e;
 
   --color-gold-100: #f7eecd;
   --color-gold-300: #e8cf7a;
   --color-gold-500: #c9a227;
   --color-gold-700: #96771a;
 
-  --color-surface: #f7f8fb;
-  --color-panel: #ffffff;
-  --color-ink: #1b2033;
-  --color-muted: #6b7391;
-  --color-line: #e3e6f0;
+  --color-surface: #f4f1e8; /* warm cream */
+  --color-panel: #fffdf7;
+  --color-ink: #17251d; /* near-black green */
+  --color-muted: #5d6b60;
+  --color-line: #e4ddca;
 
   /* Semantic, theme-aware pairs. Always use these for anything whose contrast
      matters — a raw navy-50/navy-700 pair is a light-mode hex that turns into a
      near-white box or invisible text once the dark theme is on. Each `*-ink`
      token is the only foreground guaranteed to be readable on its background. */
-  --color-brand: #2a3563; /* headings and section titles */
-  --color-chip: #eef0f7; /* unselected pill / tab / toggle */
-  --color-chip-ink: #2a3563;
-  --color-accent: #2a3563; /* selected pill / tab / toggle */
+  --color-brand: #1b4332; /* headings and section titles */
+  --color-chip: #e7efe8; /* unselected pill / tab / toggle */
+  --color-chip-ink: #1b4332;
+  --color-accent: #1b4332; /* selected pill / tab / toggle */
   --color-accent-ink: #ffffff;
-  --color-accent-soft: #d6dbec; /* selected row tint, behind normal ink */
+  --color-accent-soft: #cfe3d5; /* selected row tint, behind normal ink */
   --color-ok: #d9f2e4;
   --color-ok-ink: #146c43;
   --color-warn-soft: #fbf0cf;
@@ -46,20 +49,20 @@
 
 @layer base {
   :root[data-theme='dark'] {
-    --color-surface: #0f1428;
-    --color-panel: #191f3a;
-    --color-ink: #eef0f7;
-    --color-muted: #9aa2c4;
-    --color-line: #2a3155;
+    --color-surface: #0c1610; /* near-black green, matches logo ground */
+    --color-panel: #14261d;
+    --color-ink: #eaf3ec;
+    --color-muted: #93a89a;
+    --color-line: #24382c;
 
-    /* The accent inverts: on a dark panel the readable emphasis is a light fill
-       with dark text, not the dark navy that disappears into the background. */
-    --color-brand: #c3cae8;
-    --color-chip: #252d52;
-    --color-chip-ink: #c3cae8;
-    --color-accent: #8f9ac4;
-    --color-accent-ink: #141a33;
-    --color-accent-soft: #2a3462;
+    /* The accent inverts: on a dark panel the readable emphasis is a light green
+       fill with dark text, not the deep forest that disappears into the ground. */
+    --color-brand: #a9cbb4;
+    --color-chip: #1c3327;
+    --color-chip-ink: #cfe3d5;
+    --color-accent: #6fae86;
+    --color-accent-ink: #0d2a1e;
+    --color-accent-soft: #1f3a2b;
     --color-ok: #123d2b;
     --color-ok-ink: #7ee0ad;
     /* Amber over navy: the light-mode cream washes out to grey once it is
@@ -74,18 +77,18 @@
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme='light']) {
-      --color-surface: #0f1428;
-      --color-panel: #191f3a;
-      --color-ink: #eef0f7;
-      --color-muted: #9aa2c4;
-      --color-line: #2a3155;
+      --color-surface: #0c1610;
+      --color-panel: #14261d;
+      --color-ink: #eaf3ec;
+      --color-muted: #93a89a;
+      --color-line: #24382c;
 
-      --color-brand: #c3cae8;
-      --color-chip: #252d52;
-      --color-chip-ink: #c3cae8;
-      --color-accent: #8f9ac4;
-      --color-accent-ink: #141a33;
-      --color-accent-soft: #2a3462;
+      --color-brand: #a9cbb4;
+      --color-chip: #1c3327;
+      --color-chip-ink: #cfe3d5;
+      --color-accent: #6fae86;
+      --color-accent-ink: #0d2a1e;
+      --color-accent-soft: #1f3a2b;
       --color-ok: #123d2b;
       --color-ok-ink: #7ee0ad;
       --color-warn-soft: #2e2408;
@@ -163,7 +166,28 @@
     outline-offset: 2px;
   }
 
+  /* Theme-aware logo swap: green wordmark on light, cream wordmark on dark.
+     Mirrors the token blocks above so it tracks both the manual data-theme
+     override and the OS preference. */
+  .brand-logo-dark {
+    display: none;
+  }
+  :root[data-theme='dark'] .brand-logo-light {
+    display: none;
+  }
+  :root[data-theme='dark'] .brand-logo-dark {
+    display: block;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .brand-logo-light {
+      display: none;
+    }
+    :root:not([data-theme='light']) .brand-logo-dark {
+      display: block;
+    }
+  }
+
   .geo-texture {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%232A3563' stroke-opacity='0.06' stroke-width='2'%3E%3Crect x='25' y='25' width='70' height='70'/%3E%3Crect x='25' y='25' width='70' height='70' transform='rotate(45 60 60)'/%3E%3C/g%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%231b4332' stroke-opacity='0.07' stroke-width='2'%3E%3Crect x='25' y='25' width='70' height='70'/%3E%3Crect x='25' y='25' width='70' height='70' transform='rotate(45 60 60)'/%3E%3C/g%3E%3C/svg%3E");
   }
 }

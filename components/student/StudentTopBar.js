@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useUnreadNotifications } from '@/lib/student/useUnreadNotifications';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 
 /**
  * A thin top row carrying the notifications bell. It lives above every student
@@ -14,7 +15,8 @@ export function StudentTopBar() {
   const active = pathname === '/notifications';
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl items-center justify-end px-4 pt-3">
+    <div className="mx-auto flex w-full max-w-2xl items-center justify-between px-4 pt-3">
+      <BrandLogo className="h-8" />
       <Link
         href="/notifications"
         prefetch
