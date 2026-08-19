@@ -1,7 +1,7 @@
 # Database setup
 
 Run the migrations **in order** in **Supabase Dashboard → SQL Editor → New query**.
-Paste one file, press Run, wait for `Success`, then move to the next. There are three:
+Paste one file, press Run, wait for `Success`, then move to the next. There are four:
 
 1. `0001_base.sql` — schema, scoring/identity functions, RLS, rate-limit + audit log, seed,
    leaderboard views, transactional grants.
@@ -14,6 +14,9 @@ Paste one file, press Run, wait for `Success`, then move to the next. There are 
    de-identified `get_leaderboard()` (emoji + points; `user_id` only to admins) and
    admin-only `get_user_name()`; RLS for the task tables (and closes the old leaderboard name
    leak); and `provision_admin()` for the admin-creates-admin route.
+4. `0004_daily_task_fields.sql` — adds `category` and an optional `active_from`/`active_to`
+   date window to `daily_tasks`, so the admin can group daily tasks by section and schedule
+   when they appear (mirrors the old question builder).
 
 (These were consolidated from 25 numbered migrations — identical end state. The
 questions/grading tables built in `0001`/`0002` are left dormant under default-deny RLS;
