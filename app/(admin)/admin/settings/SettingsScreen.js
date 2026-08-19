@@ -13,6 +13,7 @@ export function SettingsScreen() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [streakBusy, setStreakBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -26,6 +27,21 @@ export function SettingsScreen() {
       }
     })();
   }, []);
+
+  async function toggleStreak() {
+    if (!program) return;
+    const next = !(program.show_streak !== false);
+    setError('');
+    setStreakBusy(true);
+    try {
+      await updateProgram(program.id, { show_streak: next });
+      setProgram((p) => ({ ...p, show_streak: next }));
+    } catch {
+      setError('تعذّر حفظ إعداد السلسلة');
+    } finally {
+      setStreakBusy(false);
+    }
+  }
 
   async function save(event) {
     event.preventDefault();
@@ -82,6 +98,26 @@ export function SettingsScreen() {
               حفظ
             </Button>
             {saved && <span className="text-sm font-semibold text-brand">تم الحفظ ✓</span>}
+          </div>
+
+          <div className="border-t border-line pt-4">
+            <label className="flex cursor-pointer items-start justify-between gap-3">
+              <span>
+                <span className="block text-sm font-semibold text-ink">
+                  إظهار السلسلة 🔥 (أيام الاستمرارية)
+                </span>
+                <span className="block text-xs text-muted">
+                  عند الإيقاف تختفي السلسلة من كل مكان: شاشة اليوم ولوحة الصدارة.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={program.show_streak !== false}
+                onChange={toggleStreak}
+                disabled={streakBusy}
+                className="mt-1 size-5 shrink-0 accent-[var(--color-accent)]"
+              />
+            </label>
           </div>
         </form>
       )}

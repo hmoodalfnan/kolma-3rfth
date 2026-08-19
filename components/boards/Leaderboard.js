@@ -12,7 +12,7 @@ const MEDALS = ['🥇', '🥈', '🥉'];
  * When `revealable` (admin), tapping a row asks for confirmation before
  * revealing that user's name.
  */
-export function Leaderboard({ revealable = false }) {
+export function Leaderboard({ revealable = false, showStreak = false }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
   const [names, setNames] = useState({}); // user_id -> revealed name
@@ -87,6 +87,11 @@ export function Leaderboard({ revealable = false }) {
                     <span className="block text-xs text-muted">اضغط لإظهار الاسم</span>
                   ) : null}
                 </span>
+                {showStreak && (
+                  <span className="shrink-0 rounded-full bg-gold-100 px-2 py-1 text-xs font-bold text-gold-700 tabular-nums">
+                    🔥 {row.streak ?? 0}
+                  </span>
+                )}
                 <span className="shrink-0 rounded-full bg-gold-100 px-3 py-1 text-sm font-bold text-gold-700">
                   {row.points} نقطة
                 </span>

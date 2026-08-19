@@ -79,6 +79,22 @@ export function DailySheet() {
 
   const isToday = dayKey === todayInRiyadh();
   const sections = groupBySection(day.questions);
+  const showStreak = ctx.schedule?.show_streak !== false;
+
+  // المهام المستمرة count toward today's points (they are "ongoing", so their
+  // points land on the day you complete them). Fold them into the day total and
+  // the ring only while viewing today.
+  const asgReady = asg.status === 'ready';
+  const includeAsg = isToday && asgReady;
+  const asgEarned = includeAsg
+    ? asg.assignments.reduce((s, a) => (asg.done.has(a.id) ? s + Number(a.points || 0) : s), 0)
+    : 0;
+  const asgPossible = includeAsg
+    ? asg.assignments.reduce((s, a) => s + Number(a.points || 0), 0)
+    : 0;
+  const earned = day.points.earned + asgEarned;
+  const possible = day.points.possible + asgPossible;
+  const ringValue = possible > 0 ? Math.round((earned / possible) * 1000) / 10 : day.completion;
 
   return (
     <div className="space-y-5 pt-2">
@@ -92,17 +108,21 @@ export function DailySheet() {
             <p className="text-xs text-muted">{formatHijri(dayKey)}</p>
 
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-              <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2.5 py-1 font-bold text-gold-700">
-                <span aria-hidden="true">🔥</span>
-                {day.streak} يوم
-              </span>
-              {!isToday && <span className="text-xs text-muted">اليوم: {day.streakToday}</span>}
+              {showStreak && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2.5 py-1 font-bold text-gold-700">
+                  <span aria-hidden="true">🔥</span>
+                  {day.streak} يوم
+                </span>
+              )}
+              {showStreak && !isToday && (
+                <span className="text-xs text-muted">اليوم: {day.streakToday}</span>
+              )}
               <span className="tabular-nums text-muted" dir="ltr">
-                {day.points.earned} / {day.points.possible}
+                {earned} / {possible}
               </span>
             </div>
           </div>
-          <ProgressRing value={day.completion} />
+          <ProgressRing value={ringValue} />
         </div>
       </header>
 
@@ -171,7 +191,8 @@ export function DailySheet() {
         })
       )}
 
-      {/* المهام المستمرة — persistent, not tied to a day, so only on today. */}
+      {/* المهام المستمرة — persistent, not tied to a day, so only on today. One
+          compact tappable row each (icon + title + short description + points). */}
       {isToday && asg.status === 'ready' && asg.assignments.length > 0 && (
         <section className="space-y-2">
           <h2 className="px-1 text-sm font-bold text-muted">مهام مستمرة</h2>
@@ -180,29 +201,30 @@ export function DailySheet() {
               const done = asg.done.has(a.id);
               const kind = KIND[a.kind] || KIND.read;
               return (
-                <li key={a.id} className={`card space-y-2 p-4 ${done ? 'opacity-70' : ''}`}>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-chip px-2 py-0.5 text-xs font-semibold text-chip-ink">
-                      <span aria-hidden="true">{kind.icon}</span> {kind.label}
-                    </span>
-                    <h3 className="min-w-0 flex-1 font-bold text-ink">{a.title}</h3>
-                    <PointsChip points={a.points} />
-                  </div>
-                  {a.body_text && (
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
-                      {a.body_text}
-                    </p>
-                  )}
+                <li key={a.id}>
                   <button
                     type="button"
                     onClick={() => asg.toggle(a.id)}
                     aria-pressed={done}
-                    className={`flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl font-semibold transition ${
-                      done ? 'bg-ok text-ok-ink' : 'bg-accent text-accent-ink hover:opacity-90'
+                    className={`card flex w-full items-start gap-3 p-3 text-start transition ${
+                      done ? 'bg-accent-soft' : ''
                     }`}
                   >
                     <CheckCircle done={done} />
-                    {done ? 'منجز' : 'تم'}
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-sm" aria-hidden="true">
+                          {kind.icon}
+                        </span>
+                        <span className="font-semibold text-ink">{a.title}</span>
+                      </span>
+                      {a.body_text && (
+                        <span className="mt-0.5 line-clamp-2 block whitespace-pre-wrap text-xs leading-relaxed text-muted">
+                          {a.body_text}
+                        </span>
+                      )}
+                    </span>
+                    <PointsChip points={a.points} />
                   </button>
                 </li>
               );

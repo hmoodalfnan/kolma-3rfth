@@ -22,11 +22,11 @@ export function DateStrip({ schedule, selected, onSelect, completionFor }) {
     <div className="flex items-center gap-2">
       <button
         type="button"
-        aria-label="اليوم السابق"
-        onClick={() => onSelect(addDays(selected, -1))}
+        aria-label="اليوم التالي"
+        onClick={() => onSelect(addDays(selected, 1))}
         className="size-10 shrink-0 rounded-lg border border-line text-brand"
       >
-        ›
+        ‹
       </button>
 
       <div className="flex flex-1 gap-1.5 overflow-x-auto pb-1">
@@ -63,11 +63,11 @@ export function DateStrip({ schedule, selected, onSelect, completionFor }) {
 
       <button
         type="button"
-        aria-label="اليوم التالي"
-        onClick={() => onSelect(addDays(selected, 1))}
+        aria-label="اليوم السابق"
+        onClick={() => onSelect(addDays(selected, -1))}
         className="size-10 shrink-0 rounded-lg border border-line text-brand"
       >
-        ‹
+        ›
       </button>
     </div>
   );
