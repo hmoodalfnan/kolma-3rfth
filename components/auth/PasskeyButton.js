@@ -52,7 +52,6 @@ export function PasskeyButton({ onError }) {
           }
         }}
       >
-        <span aria-hidden="true">☝</span>
         الدخول بالبصمة
       </Button>
     </div>

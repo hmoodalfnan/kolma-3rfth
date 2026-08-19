@@ -36,6 +36,8 @@ export function OnboardingBanner() {
   const [bioBusy, setBioBusy] = useState(false);
   const [bioDone, setBioDone] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const [barW, setBarW] = useState('100%');
+  const [paused, setPaused] = useState(false);
   const timer = useRef(null);
 
   useEffect(() => {
@@ -75,9 +77,19 @@ export function OnboardingBanner() {
     };
   }, []);
 
-  // Once the user is interacting, stop the auto-hide so it doesn't vanish on them.
+  // Drain the countdown bar from full to empty over the visible window; a frame's
+  // delay lets the transition run instead of snapping straight to empty.
+  useEffect(() => {
+    if (!show) return undefined;
+    const id = requestAnimationFrame(() => setBarW('0%'));
+    return () => cancelAnimationFrame(id);
+  }, [show]);
+
+  // Once the user is interacting, stop the auto-hide (and its bar) so it doesn't
+  // vanish on them.
   function keepOpen() {
     clearTimeout(timer.current);
+    setPaused(true);
   }
 
   async function enableBiometric() {
@@ -171,6 +183,15 @@ export function OnboardingBanner() {
             </p>
           )}
         </div>
+
+        {!paused && (
+          <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1 overflow-hidden rounded-b-2xl bg-line/40">
+            <span
+              className="block h-full bg-accent"
+              style={{ width: barW, transition: `width ${VISIBLE_MS}ms linear` }}
+            />
+          </span>
+        )}
       </div>
     </div>
   );
