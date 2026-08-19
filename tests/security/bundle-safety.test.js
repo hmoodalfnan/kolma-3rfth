@@ -140,37 +140,17 @@ describe('database migrations', () => {
     .map((f) => ({ name: f, body: readFileSync(path.join(migrationsDir, f), 'utf8') }));
 
   it('ships every migration file', () => {
+    // Consolidated from 25 numbered files into 3 ordered bundles (greenfield):
+    // base schema, platform features, and the self-serve/tasks redesign.
     expect(sql.map((s) => s.name)).toEqual([
-      '0001_schema.sql',
-      '0002_functions.sql',
-      '0003_rls.sql',
-      '0004_rate_limit_audit.sql',
-      '0005_seed.sql',
-      '0006_views.sql',
-      '0007_grants.sql',
-      '0008_global_views.sql',
-      '0009_webauthn.sql',
-      '0010_fix_rls_recursion.sql',
-      '0011_staff_must_change_password.sql',
-      '0012_create_schedule_rpc.sql',
-      '0013_question_titles.sql',
-      '0014_schedule_staff_assignment.sql',
-      '0015_manager_trip_control.sql',
-      '0016_question_sections.sql',
-      '0017_question_review_queue.sql',
-      '0018_leave_schedule.sql',
-      '0019_grant_entry_date.sql',
-      '0020_blur_leaderboard_names.sql',
-      '0021_program_and_profiles.sql',
-      '0022_tasks.sql',
-      '0023_points_leaderboard.sql',
-      '0024_rls.sql',
-      '0025_admin_mgmt.sql',
+      '0001_base.sql',
+      '0002_features.sql',
+      '0003_redesign.sql',
     ]);
   });
 
   it('enables and forces RLS on every application table', () => {
-    const rls = sql.find((s) => s.name === '0003_rls.sql').body;
+    const rls = sql.find((s) => s.name === '0001_base.sql').body;
     const tables = [
       'app_users',
       'schedules',
@@ -217,17 +197,18 @@ describe('database migrations', () => {
   });
 
   it('revokes update and delete on the audit log', () => {
-    const audit = sql.find((s) => s.name === '0004_rate_limit_audit.sql').body;
+    const audit = sql.find((s) => s.name === '0001_base.sql').body;
     expect(audit).toMatch(/revoke update, delete on audit_log/i);
     expect(audit).not.toMatch(/create policy \w+ on audit_log for (update|delete)/i);
   });
 
   it('re-checks authorization inside the SECURITY DEFINER grant functions', () => {
-    const grants = sql.find((s) => s.name === '0007_grants.sql').body;
-    const functions = grants.split(/create or replace function/i).slice(1);
-    expect(functions.length).toBeGreaterThan(0);
-    for (const fn of functions) {
-      expect(fn).toMatch(/if not is_staff_of\(/);
+    const base = sql.find((s) => s.name === '0001_base.sql').body;
+    for (const fn of ['grant_group_points', 'grant_student_points']) {
+      const idx = base.indexOf(`function ${fn}`);
+      expect(idx, `${fn} not found in base migration`).toBeGreaterThan(-1);
+      const body = base.slice(idx, idx + 900);
+      expect(body, `${fn} must re-check is_staff_of`).toMatch(/if not is_staff_of\(/);
     }
   });
 });
