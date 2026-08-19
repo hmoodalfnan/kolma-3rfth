@@ -11,6 +11,7 @@ const TABS = [
   { href: '/admin/questions', label: 'البنود اليومية' },
   { href: '/admin/assignments', label: 'المهام المستمرة' },
   { href: '/admin/users', label: 'المستخدمون' },
+  { href: '/admin/emojis', label: 'الرموز' },
   { href: '/admin/leaderboard', label: 'لوحة الصدارة' },
   { href: '/admin/admins', label: 'المشرفون' },
 ];

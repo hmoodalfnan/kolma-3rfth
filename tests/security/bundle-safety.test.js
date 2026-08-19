@@ -143,7 +143,8 @@ describe('database migrations', () => {
     // Consolidated from 25 numbered files into 3 ordered bundles (greenfield):
     // base schema, platform features, and the self-serve/tasks redesign. Later
     // additive migrations (daily-task fields, reviving the questions engine,
-    // dropping the redundant simple-task tier) append in order.
+    // dropping the redundant simple-task tier, the editable emoji gallery)
+    // append in order.
     expect(sql.map((s) => s.name)).toEqual([
       '0001_base.sql',
       '0002_features.sql',
@@ -151,6 +152,7 @@ describe('database migrations', () => {
       '0004_daily_task_fields.sql',
       '0005_revive_questions.sql',
       '0006_drop_daily_tasks.sql',
+      '0007_emoji_choices.sql',
     ]);
   });
 
