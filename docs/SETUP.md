@@ -21,12 +21,17 @@ view of their own account.
 
 ## 2. Run the migrations
 
-In **SQL Editor**, run every file in `supabase/migrations/` **in filename order**, from
-`0001_schema.sql` through `0025_admin_mgmt.sql`. Each is safe to run once, top to bottom.
+In **SQL Editor**, run the three files in `supabase/migrations/` **in order**, top to bottom:
 
-The redesign migrations (`0021`–`0025`) add: the single program, emoji/email profile columns,
-the `handle_new_user` trigger (auto-creates a profile on sign-up), the task tables, the
-de-identified leaderboard functions, their RLS, and `provision_admin`.
+1. `0001_base.sql` — schema, scoring/identity functions, RLS, rate-limit + audit log, seed,
+   views, grants.
+2. `0002_features.sql` — passkey/biometric tables, an RLS-recursion fix, and incremental
+   platform features.
+3. `0003_redesign.sql` — the current model: single program, emoji/email profile columns, the
+   `handle_new_user` trigger (auto-creates a profile on sign-up), the task tables, the
+   de-identified leaderboard functions + their RLS, and `provision_admin`.
+
+(These were consolidated from 25 numbered migrations; the end state is identical.)
 
 ## 3. Turn on email verification + redirect URLs
 

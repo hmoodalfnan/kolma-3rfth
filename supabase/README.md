@@ -1,25 +1,23 @@
 # Database setup
 
 Run the migrations **in order** in **Supabase Dashboard → SQL Editor → New query**.
-Paste one file, press Run, wait for `Success`, then move to the next. Run every file from
-`0001_schema.sql` through `0025_admin_mgmt.sql`.
+Paste one file, press Run, wait for `Success`, then move to the next. There are three:
 
-The current model is a **single program, self-registration, task-based** tracker. The
-redesign migrations are:
+1. `0001_base.sql` — schema, scoring/identity functions, RLS, rate-limit + audit log, seed,
+   leaderboard views, transactional grants.
+2. `0002_features.sql` — passkey/biometric tables, an RLS-recursion fix, and incremental
+   platform features.
+3. `0003_redesign.sql` — the current **single-program, self-registration, task-based** model:
+   seeds the one program; adds `emoji`/`email` to profiles; installs `handle_new_user`
+   (auto-creates a profile on sign-up) plus `app_program()`/`is_admin()`; creates
+   `daily_tasks` + `assignments` (read/listen) + completions with a same-day guard; the
+   de-identified `get_leaderboard()` (emoji + points; `user_id` only to admins) and
+   admin-only `get_user_name()`; RLS for the task tables (and closes the old leaderboard name
+   leak); and `provision_admin()` for the admin-creates-admin route.
 
-- `0021_program_and_profiles.sql` — seeds the one program, adds `emoji`/`email` to profiles,
-  and installs `handle_new_user` (auto-creates a profile when someone signs up), plus
-  `app_program()` and `is_admin()` helpers.
-- `0022_tasks.sql` — `daily_tasks` + `assignments` (read/listen) + their completion tables,
-  with a same-day guard on daily completions.
-- `0023_points_leaderboard.sql` — `user_points`, `get_leaderboard()` (emoji + points only;
-  `user_id` returned to admins for the name-reveal), and `get_user_name()` (admin only).
-- `0024_rls.sql` — RLS for the task tables and closes the old leaderboard name leak (a user
-  can now read only their own profile row; names flow only through the admin-gated function).
-- `0025_admin_mgmt.sql` — `provision_admin()` for the admin-creates-admin route.
-
-Earlier migrations (`0001`–`0020`) build the original schema; the questions/grading tables
-they create are left dormant under default-deny RLS — nothing in the current UI reads them.
+(These were consolidated from 25 numbered migrations — identical end state. The
+questions/grading tables built in `0001`/`0002` are left dormant under default-deny RLS;
+nothing in the current UI reads them.)
 
 ## Auth settings
 
