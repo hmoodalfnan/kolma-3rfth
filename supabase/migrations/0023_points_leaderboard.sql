@@ -8,7 +8,7 @@
 -- Per-user totals. security_invoker so direct SELECTs still respect RLS; access
 -- is additionally revoked below so only the SECURITY DEFINER functions read it.
 create or replace view user_points
-with (security_invoker = true) as
+with (security_invoker = on) as
 select
   s.id as user_id,
   coalesce(

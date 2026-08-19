@@ -1,170 +1,157 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { QuestionCard } from '@/components/questions';
-import { ProgressRing } from '@/components/ui/ProgressRing';
-import { SkeletonCard, SkeletonList } from '@/components/ui/Skeleton';
-import { groupBySection } from '@/lib/questions/active';
-import { formatDayArabic, lockReason, todayInRiyadh } from '@/lib/schedule-time/day';
-import { useStudentContext } from '@/lib/student/useStudentContext';
-import { useDay } from '@/lib/student/useDay';
-import { DateStrip } from './DateStrip';
-import { DayGrants } from './DayGrants';
-import { CompactBoolSection } from '@/components/questions/CompactBoolSection';
+import { useToday } from '@/lib/tasks/useToday';
+import { earnedToday, earnedAssignments } from '@/lib/tasks/queries';
+import { SkeletonList } from '@/components/ui/Skeleton';
 
-/**
- * One sentence per reason a day is closed. A day that has not arrived yet had
- * been reported as a missed deadline, which is the opposite of what is true and
- * sent students looking for a way to appeal it.
- */
-const LOCK_TEXT = {
-  archived: () => 'هذه الرحلة مؤرشفة — للاطلاع فقط.',
-  future: () => 'هذا اليوم لم يأتِ بعد — تعال إليه في وقته.',
-  before_start: (s) => `هذا اليوم قبل بداية الرحلة (${s.start_date}).`,
-  after_end: (s) => `انتهت الرحلة في ${s.end_date} — للاطلاع فقط.`,
-  backfill_closed: () => 'انتهت مهلة التعديل على هذا اليوم.',
+const KIND = {
+  read: { label: 'قراءة', icon: '📖' },
+  listen: { label: 'استماع', icon: '🎧' },
 };
 
-const LOCK_FALLBACK = 'لا يمكن التعديل على هذا اليوم.';
+function PointsChip({ points }) {
+  return (
+    <span className="shrink-0 rounded-full bg-gold-100 px-2 py-0.5 text-xs font-bold text-gold-700">
+      {points} نقطة
+    </span>
+  );
+}
+
+function CheckCircle({ done }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex size-7 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold transition ${
+        done ? 'border-accent bg-accent text-accent-ink' : 'border-line text-transparent'
+      }`}
+    >
+      ✓
+    </span>
+  );
+}
 
 export function DailySheet() {
-  const ctx = useStudentContext();
-  const [dayKey, setDayKey] = useState(() => todayInRiyadh());
+  const {
+    status,
+    ctxStatus,
+    dailyTasks,
+    assignments,
+    doneTasks,
+    doneAssignments,
+    error,
+    toggleTask,
+    toggleAssignment,
+  } = useToday();
 
-  const day = useDay({
-    studentId: ctx.student?.id,
-    schedule: ctx.schedule,
-    dayKey,
-  });
+  if (ctxStatus === 'unauthenticated') {
+    return <p className="p-4 text-center text-muted">يرجى تسجيل الدخول.</p>;
+  }
 
-  useEffect(() => {
-    if (ctx.status === 'unauthenticated') window.location.href = '/login';
-  }, [ctx.status]);
-
-  if (ctx.status !== 'ready') {
+  if (status === 'loading') {
     return (
-      <div className="space-y-4">
-        <SkeletonList rows={1} className="h-20" />
-        <SkeletonCard />
-        <SkeletonCard />
+      <div className="space-y-4 pt-2">
+        <SkeletonList rows={5} />
       </div>
     );
   }
 
-  const sections = groupBySection(day.questions);
-  const isToday = dayKey === todayInRiyadh();
+  const earned = earnedToday(dailyTasks, doneTasks) + earnedAssignments(assignments, doneAssignments);
 
   return (
-    <div className="space-y-4">
-      <header className="card p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold">{ctx.student.full_name}</h1>
-
-            {/* The trip and its dates: a student should not have to ask when
-                what they are filling in actually ends. */}
-            <p className="mt-1 text-sm">
-              <span className="text-muted">رحلة: </span>
-              <span className="font-semibold">{ctx.schedule.name}</span>
-            </p>
-            <p className="text-sm">
-              <span className="text-muted">الفترة: </span>
-              <span className="tabular-nums">
-                {ctx.schedule.start_date} —{' '}
-                {ctx.schedule.end_date ?? 'مستمرة'}
-              </span>
-            </p>
-
-            <p className="mt-2 text-sm font-semibold">{formatDayArabic(dayKey)}</p>
-
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-              {/* Reflects the day being looked at, so a past day reports the
-                  streak as it stood then rather than today's. */}
-              <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2.5 py-1 font-bold text-gold-700">
-                <span aria-hidden="true">🔥</span>
-                ستريك {day.streak} يوم
-              </span>
-              {!isToday && (
-                <span className="text-xs text-muted">اليوم: {day.streakToday} يوم</span>
-              )}
-              <span className="tabular-nums text-muted" dir="ltr">
-                {day.points.earned} / {day.points.possible}
-              </span>
-            </div>
-          </div>
-          <ProgressRing value={day.completion} />
+    <div className="space-y-6 pt-2">
+      <header className="card flex items-center justify-between p-4">
+        <div>
+          <h1 className="text-lg font-bold text-brand">مهام اليوم</h1>
+          <p className="text-xs text-muted">أكمل مهامك واكسب النقاط</p>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-extrabold text-gold-500">{earned}</div>
+          <div className="text-[10px] font-semibold text-muted">نقاط اليوم</div>
         </div>
       </header>
 
-      <DateStrip
-        schedule={ctx.schedule}
-        selected={dayKey}
-        onSelect={setDayKey}
-        completionFor={day.completionFor}
-      />
-
-      {!day.editable && (
-        <p className="rounded-xl bg-gold-100 px-3 py-2 text-center text-sm font-semibold text-gold-700">
-          {LOCK_TEXT[lockReason(ctx.schedule, dayKey)]?.(ctx.schedule) ?? LOCK_FALLBACK}
+      {error && (
+        <p role="alert" className="rounded-lg bg-danger-soft p-2 text-center text-sm text-danger-ink">
+          {error}
         </p>
       )}
 
-      {day.error && (
-        <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink">
-          {day.error}
-        </p>
-      )}
+      <section className="space-y-2">
+        <h2 className="px-1 text-sm font-bold text-muted">المهام اليومية</h2>
+        {dailyTasks.length === 0 ? (
+          <p className="card p-4 text-center text-sm text-muted">لا توجد مهام يومية بعد.</p>
+        ) : (
+          <ul className="space-y-2">
+            {dailyTasks.map((task) => {
+              const done = doneTasks.has(task.id);
+              return (
+                <li key={task.id}>
+                  <button
+                    type="button"
+                    onClick={() => toggleTask(task.id)}
+                    aria-pressed={done}
+                    className={`card flex w-full items-center gap-3 p-3 text-start transition ${
+                      done ? 'bg-accent-soft' : ''
+                    }`}
+                  >
+                    <CheckCircle done={done} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold text-ink">{task.title}</span>
+                      {task.description && (
+                        <span className="block text-xs text-muted">{task.description}</span>
+                      )}
+                    </span>
+                    <PointsChip points={task.points} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
-      {day.loading ? (
-        <>
-          <SkeletonCard />
-          <SkeletonCard />
-        </>
-      ) : (
-        sections.map(({ section, items }) => {
-          // A section of nothing but yes/no deeds collapses into one grid.
-          // Five rawatib were five full-width rows for five checkboxes.
-          const allBool = items.length > 1 && items.every((q) => q.type === 'bool');
-
-          if (allBool) {
-            return (
-              <CompactBoolSection
-                key={section}
-                section={section}
-                items={items}
-                values={day.values}
-                disabled={!day.editable}
-                onChange={(id, v) => day.setValue(id, v)}
-              />
-            );
-          }
-
-          return (
-            <section key={section} className="card p-4">
-              <h2 className="mb-3 border-b border-line pb-2 text-sm font-bold text-brand">
-                {section}
-              </h2>
-              <div className="space-y-3">
-                {items.map((q) => (
-                  <QuestionCard
-                    key={q.id}
-                    question={q}
-                    value={day.values[q.id]}
-                    disabled={!day.editable}
-                    onChange={(v) => day.setValue(q.id, v)}
-                  />
-                ))}
-              </div>
-            </section>
-          );
-        })
-      )}
-
-      {!day.loading && day.questions.length === 0 && (
-        <p className="card p-6 text-center text-sm text-muted">لا توجد بنود مجدولة لهذا اليوم.</p>
-      )}
-
-      <DayGrants studentId={ctx.student.id} dayKey={dayKey} />
+      <section className="space-y-2">
+        <h2 className="px-1 text-sm font-bold text-muted">مهام مستمرة</h2>
+        {assignments.length === 0 ? (
+          <p className="card p-4 text-center text-sm text-muted">لا توجد مهام مستمرة حالياً.</p>
+        ) : (
+          <ul className="space-y-2">
+            {assignments.map((a) => {
+              const done = doneAssignments.has(a.id);
+              const kind = KIND[a.kind] || KIND.read;
+              return (
+                <li key={a.id} className={`card space-y-2 p-4 ${done ? 'opacity-70' : ''}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-chip px-2 py-0.5 text-xs font-semibold text-chip-ink">
+                      <span aria-hidden="true">{kind.icon}</span> {kind.label}
+                    </span>
+                    <h3 className="min-w-0 flex-1 font-bold text-ink">{a.title}</h3>
+                    <PointsChip points={a.points} />
+                  </div>
+                  {a.body_text && (
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                      {a.body_text}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleAssignment(a.id)}
+                    aria-pressed={done}
+                    className={`flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl font-semibold transition ${
+                      done
+                        ? 'bg-ok text-ok-ink'
+                        : 'bg-accent text-accent-ink hover:opacity-90'
+                    }`}
+                  >
+                    <CheckCircle done={done} />
+                    {done ? 'تم الإنجاز' : 'وضع علامة تم'}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

@@ -21,6 +21,21 @@ const post = (body, headers = {}) =>
     }),
   );
 
+// Route reads db.from('app_users')...maybeSingle(), then db.from('students')...maybeSingle().
+// This wires each table to a preset row.
+function wireTables({ admin = null, profile = null } = {}) {
+  from.mockImplementation((table) => ({
+    select: () => ({
+      eq: () => ({
+        maybeSingle: () =>
+          Promise.resolve({ data: table === 'app_users' ? admin : profile }),
+      }),
+    }),
+  }));
+}
+
+const creds = { email: 'user@example.com', password: 'Secret123' };
+
 beforeEach(() => {
   rpc.mockReset();
   signIn.mockReset();
@@ -30,33 +45,27 @@ beforeEach(() => {
     if (name === 'auth_check_lock') return Promise.resolve({ data: null });
     return Promise.resolve({ data: null, error: null });
   });
+  wireTables();
 });
 
 describe('POST /api/auth/login', () => {
   it('rejects a cross-site request before touching the database', async () => {
-    const res = await post(
-      { mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' },
-      { origin: 'https://evil.example' },
-    );
+    const res = await post(creds, { origin: 'https://evil.example' });
     expect(res.status).toBe(403);
     expect(signIn).not.toHaveBeenCalled();
   });
 
   it('rejects a malformed body with 400 and no sign-in attempt', async () => {
-    const res = await post({ mode: 'staff', username: 'x' });
+    const res = await post({ email: 'not-an-email' });
     expect(res.status).toBe(400);
     expect(signIn).not.toHaveBeenCalled();
-  });
-
-  it('rejects an unknown mode', async () => {
-    expect((await post({ mode: 'root', username: 'aaa', password: 'bbbbbbbb' })).status).toBe(400);
   });
 
   it('returns 429 when the IP rate limit is exhausted', async () => {
     rpc.mockImplementation((name) =>
       name === 'rl_hit' ? Promise.resolve({ data: false }) : Promise.resolve({ data: null }),
     );
-    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' });
+    const res = await post(creds);
     expect(res.status).toBe(429);
     expect(signIn).not.toHaveBeenCalled();
   });
@@ -69,14 +78,14 @@ describe('POST /api/auth/login', () => {
       }
       return Promise.resolve({ data: null });
     });
-    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' });
+    const res = await post(creds);
     expect(res.status).toBe(429);
     expect(signIn).not.toHaveBeenCalled();
   });
 
   it('records a failure and returns a generic message on bad credentials', async () => {
     signIn.mockResolvedValue({ data: {}, error: { message: 'Invalid login credentials' } });
-    const res = await post({ mode: 'staff', username: 'mohammed', password: 'WrongPass1' });
+    const res = await post(creds);
     const body = await res.json();
 
     expect(res.status).toBe(401);
@@ -85,120 +94,72 @@ describe('POST /api/auth/login', () => {
     expect(rpc).toHaveBeenCalledWith('auth_record_failure', expect.anything());
   });
 
-  it('returns the same generic message for an unknown username as for a wrong password', async () => {
-    signIn.mockResolvedValue({ data: {}, error: { message: 'User not found' } });
-    const unknown = await (
-      await post({ mode: 'staff', username: 'nobody', password: 'WrongPass1' })
-    ).json();
+  it('surfaces an unconfirmed email so the UI can offer a resend', async () => {
+    signIn.mockResolvedValue({ data: {}, error: { code: 'email_not_confirmed', message: 'Email not confirmed' } });
+    const res = await post(creds);
+    const body = await res.json();
 
-    signIn.mockResolvedValue({ data: {}, error: { message: 'Invalid login credentials' } });
-    const wrong = await (
-      await post({ mode: 'staff', username: 'mohammed', password: 'WrongPass1' })
-    ).json();
-
-    expect(unknown.error).toBe(wrong.error);
+    expect(res.status).toBe(403);
+    expect(body.needsConfirmation).toBe(true);
+    expect(body.email).toBe('user@example.com');
   });
 
-  it('signs a manager in, clears the lockout, and reports their role', async () => {
+  it('signs an admin in, clears the lockout, and reports their role', async () => {
     signIn.mockResolvedValue({
       data: { session: { access_token: 'tok', refresh_token: 'ref' }, user: { id: 'u1' } },
       error: null,
     });
-    from.mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () =>
-            Promise.resolve({
-              data: { id: 'u1', role: 'manager', display_name: 'مشرف', is_active: true },
-            }),
-        }),
-      }),
-    });
+    wireTables({ admin: { id: 'u1', role: 'super_admin', display_name: 'المشرف', is_active: true } });
 
-    const res = await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' });
+    const res = await post(creds);
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body.role).toBe('manager');
+    expect(body.role).toBe('super_admin');
     expect(body.session.access_token).toBe('tok');
-    expect(body.redirect).toBe('/schedules');
+    expect(body.redirect).toBe('/admin/global-board');
     expect(rpc).toHaveBeenCalledWith('auth_reset_failures', expect.anything());
     expect(rpc).toHaveBeenCalledWith('write_audit', expect.objectContaining({ p_action: 'login' }));
   });
 
-  it('refuses a deactivated staff account even with the right password', async () => {
+  it('refuses a deactivated admin account even with the right password', async () => {
     signIn.mockResolvedValue({
       data: { session: { access_token: 'tok' }, user: { id: 'u1' } },
       error: null,
     });
-    from.mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: { id: 'u1', role: 'manager', is_active: false } }),
-        }),
-      }),
-    });
-    expect(
-      (await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' })).status,
-    ).toBe(403);
+    wireTables({ admin: { id: 'u1', role: 'super_admin', is_active: false } });
+    expect((await post(creds)).status).toBe(403);
   });
 
-  it('rejects a student whose id is not in the schedule named by the slug', async () => {
-    from.mockReturnValue({
-      select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }) }) }),
+  it('signs a normal user in and routes them to today', async () => {
+    signIn.mockResolvedValue({
+      data: { session: { access_token: 'tok', refresh_token: 'ref' }, user: { id: 'au1' } },
+      error: null,
     });
-    const res = await post({
-      mode: 'student',
-      studentId: '8f1c2a3b-4d5e-6f70-8192-a3b4c5d6e7f8',
-      pin: '482913',
-      slug: 'abcdefghij',
-    });
-    expect(res.status).toBe(401);
-    expect(signIn).not.toHaveBeenCalled();
+    wireTables({ admin: null, profile: { id: 's1', full_name: 'مستخدم', is_active: true } });
+
+    const res = await post(creds);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.role).toBe('student');
+    expect(body.redirect).toBe('/today');
+    expect(body.studentId).toBe('s1');
   });
 
-  it('flags a student who must still change their PIN', async () => {
-    from.mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          eq: () => ({
-            maybeSingle: () =>
-              Promise.resolve({
-                data: {
-                  id: 's1',
-                  schedule_id: 'sch1',
-                  full_name: 'طالب',
-                  must_change_password: true,
-                  is_active: true,
-                },
-              }),
-          }),
-        }),
-      }),
-    });
+  it('rejects a confirmed login with no profile row', async () => {
     signIn.mockResolvedValue({
       data: { session: { access_token: 'tok' }, user: { id: 'au1' } },
       error: null,
     });
-
-    const body = await (
-      await post({
-        mode: 'student',
-        studentId: '8f1c2a3b-4d5e-6f70-8192-a3b4c5d6e7f8',
-        pin: '482913',
-        slug: 'abcdefghij',
-      })
-    ).json();
-
-    expect(body.role).toBe('student');
-    expect(body.mustChangePassword).toBe(true);
-    expect(body.redirect).toBe('/change-password');
+    wireTables({ admin: null, profile: null });
+    expect((await post(creds)).status).toBe(401);
   });
 
   it('never leaks the submitted password into the audit payload', async () => {
     signIn.mockResolvedValue({ data: {}, error: { message: 'Invalid login credentials' } });
-    await post({ mode: 'staff', username: 'mohammed', password: 'Deeds tracker!2026' });
+    await post({ email: 'user@example.com', password: 'HushHush9' });
     const auditCalls = rpc.mock.calls.filter(([name]) => name === 'write_audit');
-    expect(JSON.stringify(auditCalls)).not.toMatch(/Deeds tracker!2026/);
+    expect(JSON.stringify(auditCalls)).not.toMatch(/HushHush9/);
   });
 });

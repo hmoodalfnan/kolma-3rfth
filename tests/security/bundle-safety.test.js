@@ -161,6 +161,11 @@ describe('database migrations', () => {
       '0018_leave_schedule.sql',
       '0019_grant_entry_date.sql',
       '0020_blur_leaderboard_names.sql',
+      '0021_program_and_profiles.sql',
+      '0022_tasks.sql',
+      '0023_points_leaderboard.sql',
+      '0024_rls.sql',
+      '0025_admin_mgmt.sql',
     ]);
   });
 
