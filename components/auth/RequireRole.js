@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase/browser';
-import { getStoredRole } from '@/lib/auth/session';
+import { getStoredRole, patchStoredRole } from '@/lib/auth/session';
 import { canAccess, homeFor } from '@/lib/auth/guard';
 import { SkeletonList } from '@/components/ui/Skeleton';
 
@@ -24,9 +24,36 @@ export function RequireRole({ allow, children }) {
         return;
       }
 
-      const stored = getStoredRole();
-      const role = stored?.role ?? null;
+      let stored = getStoredRole();
+      let role = stored?.role ?? null;
 
+      // A user who just confirmed their email arrives with a valid Supabase
+      // session but no locally-stored role — they never passed through the login
+      // route. Resolve their (active) student profile once so the confirmation
+      // link lands them straight in the app instead of bouncing to /login.
+      if (!role) {
+        const { data: auth } = await getBrowserClient().auth.getUser();
+        const uid = auth?.user?.id;
+        if (uid) {
+          const { data: profile } = await getBrowserClient()
+            .from('students')
+            .select('id, full_name, is_active')
+            .eq('auth_uid', uid)
+            .maybeSingle();
+          if (!alive) return;
+          if (profile && profile.is_active !== false) {
+            patchStoredRole({
+              role: 'student',
+              displayName: profile.full_name,
+              studentId: profile.id,
+            });
+            stored = getStoredRole();
+            role = 'student';
+          }
+        }
+      }
+
+      if (!alive) return;
       if (!role || !allow.includes(role) || !canAccess(role, pathname)) {
         router.replace(homeFor(role));
         return;

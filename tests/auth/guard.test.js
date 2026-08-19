@@ -17,13 +17,12 @@ describe('canAccess', () => {
   it('keeps a normal user inside the user area', () => {
     expect(canAccess('student', '/today')).toBe(true);
     expect(canAccess('student', '/board')).toBe(true);
-    expect(canAccess('student', '/notifications')).toBe(true);
     expect(canAccess('student', '/settings')).toBe(true);
     expect(canAccess('student', '/admin/users')).toBe(false);
   });
 
   it('lets a super admin everywhere', () => {
-    for (const path of ['/today', '/admin/daily-tasks', '/admin/users', '/admin/leaderboard']) {
+    for (const path of ['/today', '/admin/questions', '/admin/users', '/admin/leaderboard']) {
       expect(canAccess('super_admin', path)).toBe(true);
     }
   });

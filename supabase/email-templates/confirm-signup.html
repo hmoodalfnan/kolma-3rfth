@@ -1,0 +1,69 @@
+<!--
+  Supabase Auth → "Confirm signup" email template for كلّما عرفته.
+
+  Paste the markup below into:
+    Supabase Dashboard → Authentication → Emails → "Confirm signup" → Message body.
+  Also set the Subject to:  تأكيد حسابك في كلّما عرفته
+  {{ .ConfirmationURL }} is filled in by Supabase and points at the redirect you
+  configured (production /today). Styles are inline because email clients strip
+  <style> blocks; keep them inline if you edit.
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0;padding:0;background-color:#f4f1ea;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" dir="rtl" lang="ar" style="max-width:480px;background-color:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e6e1d5;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        <!-- Header -->
+        <tr>
+          <td align="center" style="background-color:#1b4332;padding:28px 24px;">
+            <img src="https://kolma-3rfth.vercel.app/logo.png" alt="كلّما عرفته" width="150" style="display:block;height:auto;max-width:150px;border:0;" />
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td align="right" style="padding:32px 28px 8px;">
+            <h1 style="margin:0 0 12px;font-size:22px;line-height:1.4;color:#1b4332;font-weight:700;">
+              تأكيد بريدك الإلكتروني
+            </h1>
+            <p style="margin:0 0 24px;font-size:15px;line-height:1.9;color:#4b5563;">
+              مرحباً بك في <strong style="color:#1b4332;">كلّما عرفته</strong> 🌱<br />
+              اضغط الزر أدناه لتأكيد بريدك وتفعيل حسابك والبدء بمتابعة أعمالك اليومية.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Button -->
+        <tr>
+          <td align="center" style="padding:8px 28px 28px;">
+            <a href="{{ .ConfirmationURL }}"
+               style="display:inline-block;background-color:#1b4332;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:14px 40px;border-radius:12px;">
+              تأكيد الحساب
+            </a>
+          </td>
+        </tr>
+
+        <!-- Fallback link -->
+        <tr>
+          <td align="right" style="padding:0 28px 28px;">
+            <p style="margin:0 0 6px;font-size:13px;line-height:1.8;color:#6b7280;">
+              لم يعمل الزر؟ انسخ هذا الرابط وافتحه في المتصفح:
+            </p>
+            <p style="margin:0;font-size:12px;line-height:1.7;word-break:break-all;">
+              <a href="{{ .ConfirmationURL }}" style="color:#2f6b4f;text-decoration:underline;">{{ .ConfirmationURL }}</a>
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td align="center" style="background-color:#f4f1ea;padding:20px 28px;border-top:1px solid #e6e1d5;">
+            <p style="margin:0;font-size:12px;line-height:1.7;color:#9ca3af;">
+              إن لم تُنشئ هذا الحساب، فتجاهل هذه الرسالة بأمان.<br />
+              كلّما عرفته — متابعة الأعمال اليومية والمهام
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

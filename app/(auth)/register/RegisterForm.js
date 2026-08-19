@@ -7,6 +7,7 @@ import { Field, Input } from '@/components/ui/Field';
 import { EmojiPicker } from '@/components/ui/EmojiPicker';
 import { getBrowserClient } from '@/lib/supabase/browser';
 import { registerSchema } from '@/lib/validation/auth';
+import { siteUrl } from '@/lib/config/site';
 
 export function RegisterForm() {
   const [fullName, setFullName] = useState('');
@@ -34,7 +35,9 @@ export function RegisterForm() {
         password: parsed.data.password,
         options: {
           data: { full_name: parsed.data.fullName, emoji: parsed.data.emoji },
-          emailRedirectTo: `${window.location.origin}/login`,
+          // Always the production origin (not localhost/preview) so the link in
+          // the email works on any device and lands the confirmed user in the app.
+          emailRedirectTo: `${siteUrl()}/today`,
         },
       });
 

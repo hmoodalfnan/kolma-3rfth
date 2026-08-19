@@ -1,7 +1,7 @@
 'use client';
 
 import { useToday } from '@/lib/tasks/useToday';
-import { earnedToday, earnedAssignments } from '@/lib/tasks/queries';
+import { earnedAssignments } from '@/lib/tasks/queries';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { QuestionCard } from '@/components/questions';
 import { groupBySection } from '@/lib/questions/active';
@@ -11,24 +11,6 @@ const KIND = {
   read: { label: 'قراءة', icon: '📖' },
   listen: { label: 'استماع', icon: '🎧' },
 };
-
-// Order tasks into [category, tasks] groups, preserving each task's sort_order
-// within a group and pushing the uncategorised bucket ('') last. When nothing is
-// categorised this yields a single ['', tasks] group and the UI stays flat.
-function groupByCategory(tasks) {
-  const map = new Map();
-  for (const t of tasks) {
-    const key = t.category || '';
-    if (!map.has(key)) map.set(key, []);
-    map.get(key).push(t);
-  }
-  return [...map.entries()].sort(([a], [b]) => {
-    if (a === b) return 0;
-    if (a === '') return 1;
-    if (b === '') return -1;
-    return a.localeCompare(b, 'ar');
-  });
-}
 
 function PointsChip({ points }) {
   return (
@@ -55,14 +37,11 @@ export function DailySheet() {
   const {
     status,
     ctxStatus,
-    dailyTasks,
     assignments,
     questions,
-    doneTasks,
     doneAssignments,
     answers,
     error,
-    toggleTask,
     toggleAssignment,
     saveAnswer,
   } = useToday();
@@ -80,7 +59,6 @@ export function DailySheet() {
   }
 
   const earned =
-    earnedToday(dailyTasks, doneTasks) +
     earnedAssignments(assignments, doneAssignments) +
     dayPoints(questions, answers).earned;
 
@@ -128,47 +106,6 @@ export function DailySheet() {
           ))}
         </section>
       )}
-
-      <section className="space-y-4">
-        <h2 className="px-1 text-sm font-bold text-muted">المهام اليومية</h2>
-        {dailyTasks.length === 0 ? (
-          <p className="card p-4 text-center text-sm text-muted">لا توجد مهام يومية بعد.</p>
-        ) : (
-          groupByCategory(dailyTasks).map(([category, items]) => (
-            <div key={category || '__none__'} className="space-y-2">
-              {category && (
-                <h3 className="px-1 text-xs font-bold text-brand">{category}</h3>
-              )}
-              <ul className="space-y-2">
-                {items.map((task) => {
-                  const done = doneTasks.has(task.id);
-                  return (
-                    <li key={task.id}>
-                      <button
-                        type="button"
-                        onClick={() => toggleTask(task.id)}
-                        aria-pressed={done}
-                        className={`card flex w-full items-center gap-3 p-3 text-start transition ${
-                          done ? 'bg-accent-soft' : ''
-                        }`}
-                      >
-                        <CheckCircle done={done} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-semibold text-ink">{task.title}</span>
-                          {task.description && (
-                            <span className="block text-xs text-muted">{task.description}</span>
-                          )}
-                        </span>
-                        <PointsChip points={task.points} />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))
-        )}
-      </section>
 
       <section className="space-y-2">
         <h2 className="px-1 text-sm font-bold text-muted">مهام مستمرة</h2>
