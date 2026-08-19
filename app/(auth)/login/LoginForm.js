@@ -1,22 +1,28 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { applySession } from '@/lib/auth/session';
+import { getBrowserClient } from '@/lib/supabase/browser';
 import { PasskeyButton } from '@/components/auth/PasskeyButton';
 
-export function StaffLogin() {
+export function LoginForm() {
   const router = useRouter();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [resent, setResent] = useState(false);
 
   async function submit(event) {
     event.preventDefault();
     setError('');
+    setNeedsConfirm(false);
+    setResent(false);
     setBusy(true);
 
     try {
@@ -25,22 +31,20 @@ export function StaffLogin() {
         res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            mode: 'staff',
-            username: username.trim().toLowerCase(),
-            password,
-          }),
+          body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
         });
       } catch {
-        // Only a genuinely failed request lands here — this is the one case
-        // where blaming the connection is actually right.
         setError('تعذّر الاتصال بالخادم، تحقّق من الإنترنت');
         return;
       }
 
-      // A crashed handler can return an empty body, so never let a parse failure
-      // masquerade as a network problem.
       const body = await res.json().catch(() => ({}));
+
+      if (res.status === 403 && body.needsConfirmation) {
+        setNeedsConfirm(true);
+        setError(body.error || 'يرجى تأكيد بريدك الإلكتروني أولاً');
+        return;
+      }
 
       if (!res.ok) {
         setError(body.error || `تعذّر تسجيل الدخول (خطأ ${res.status})`);
@@ -55,20 +59,35 @@ export function StaffLogin() {
     }
   }
 
+  async function resend() {
+    setResent(false);
+    try {
+      await getBrowserClient().auth.resend({
+        type: 'signup',
+        email: email.trim().toLowerCase(),
+      });
+      setResent(true);
+    } catch {
+      setError('تعذّر إرسال رسالة التأكيد، حاول لاحقاً');
+    }
+  }
+
   return (
     <form onSubmit={submit} className="card space-y-4 p-6">
-      <h2 className="text-lg font-bold">دخول المشرفين</h2>
+      <h2 className="text-lg font-bold">تسجيل الدخول</h2>
 
-      <Field label="اسم المستخدم" htmlFor="username">
+      <Field label="البريد الإلكتروني" htmlFor="email">
         <Input
-          id="username"
-          name="username"
+          id="email"
+          name="email"
+          type="email"
+          inputMode="email"
           dir="ltr"
-          autoComplete="username"
+          autoComplete="email"
           autoCapitalize="none"
           spellCheck={false}
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           required
         />
       </Field>
@@ -86,14 +105,29 @@ export function StaffLogin() {
         />
       </Field>
 
+      {needsConfirm && (
+        <div className="rounded-lg bg-warn-soft p-3 text-sm text-warn-ink">
+          {resent ? (
+            <span>تم إرسال رسالة التأكيد، تحقّق من بريدك.</span>
+          ) : (
+            <button type="button" onClick={resend} className="font-semibold underline">
+              إعادة إرسال رسالة التأكيد
+            </button>
+          )}
+        </div>
+      )}
+
       <Button type="submit" loading={busy} className="w-full">
         دخول
       </Button>
 
       <PasskeyButton onError={setError} />
 
-      <p className="text-center text-xs text-muted">
-        الطلاب يدخلون عبر رابط الرحلة الخاص بهم.
+      <p className="text-center text-sm text-muted">
+        ليس لديك حساب؟{' '}
+        <Link href="/register" prefetch className="font-semibold text-brand underline">
+          أنشئ حساباً
+        </Link>
       </p>
     </form>
   );

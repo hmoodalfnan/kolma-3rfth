@@ -1,7 +1,7 @@
-import { StaffLogin } from './StaffLogin';
+import { LoginForm } from './LoginForm';
 
-export const metadata = { title: 'دخول المشرفين — المتابع الإيماني' };
+export const metadata = { title: 'تسجيل الدخول — كلّما عرفته' };
 
 export default function LoginPage() {
-  return <StaffLogin />;
+  return <LoginForm />;
 }

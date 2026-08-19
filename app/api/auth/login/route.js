@@ -2,13 +2,20 @@ import { safeHandler } from '@/lib/http/safe-handler';
 import { createServiceClient } from '@/lib/supabase/server';
 import { clientIp, sameOrigin, userAgent, jsonResponse as json } from '@/lib/http/request-context';
 import { loginSchema } from '@/lib/validation/auth';
-import { staffEmail, studentEmail } from '@/lib/auth/identity';
 import { writeAudit } from '@/lib/audit/write';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const GENERIC = 'بيانات الدخول غير صحيحة';
+
+function isUnconfirmed(error) {
+  if (!error) return false;
+  return (
+    error.code === 'email_not_confirmed' ||
+    /not\s*confirmed/i.test(error.message || '')
+  );
+}
 
 async function postHandler(request) {
   if (!sameOrigin(request)) return json({ error: 'طلب غير مسموح' }, 403);
@@ -22,7 +29,7 @@ async function postHandler(request) {
 
   const parsed = loginSchema.safeParse(raw);
   if (!parsed.success) return json({ error: 'طلب غير صالح' }, 400);
-  const input = parsed.data;
+  const { email, password } = parsed.data;
 
   const db = createServiceClient();
   const ip = clientIp(request);
@@ -36,8 +43,7 @@ async function postHandler(request) {
   });
   if (ipGate.data === false) return json({ error: 'محاولات كثيرة، حاول لاحقاً' }, 429);
 
-  const identifier =
-    input.mode === 'staff' ? `staff:${input.username}` : `student:${input.studentId}`;
+  const identifier = `email:${email}`;
 
   const lock = await db.rpc('auth_check_lock', { p_identifier: identifier });
   if (lock.data) return json({ error: 'تم إيقاف الحساب مؤقتاً بسبب محاولات خاطئة' }, 429);
@@ -63,44 +69,30 @@ async function postHandler(request) {
     return json({ error: GENERIC }, 401);
   }
 
-  let email;
-  let student = null;
-
-  if (input.mode === 'student') {
-    // The student must belong to the schedule the join link names.
-    const { data } = await db
-      .from('students')
-      .select(
-        'id, schedule_id, full_name, must_change_password, is_active, schedules!inner(slug, status)',
-      )
-      .eq('id', input.studentId)
-      .eq('schedules.slug', input.slug)
-      .maybeSingle();
-
-    if (!data || data.is_active === false) return fail('student_not_in_schedule');
-    student = data;
-    email = studentEmail(input.studentId);
-  } else {
-    email = staffEmail(input.username);
-  }
-
-  const password = input.mode === 'student' ? input.pin : input.password;
   const { data: auth, error } = await db.auth.signInWithPassword({ email, password });
+
+  if (isUnconfirmed(error)) {
+    // Surface this specifically so the UI can offer to resend the link. It admits
+    // the address exists, which is the accepted trade for a usable resend flow.
+    return json(
+      { error: 'يرجى تأكيد بريدك الإلكتروني أولاً', needsConfirmation: true, email },
+      403,
+    );
+  }
   if (error || !auth?.session) return fail('bad_credentials');
 
-  if (input.mode === 'staff') {
-    const { data: profile } = await db
-      .from('app_users')
-      .select('id, role, display_name, is_active, must_change_password')
-      .eq('id', auth.user.id)
-      .maybeSingle();
+  // Resolve role: an app_users row means admin; otherwise a profile means user.
+  const { data: admin } = await db
+    .from('app_users')
+    .select('id, role, display_name, is_active')
+    .eq('id', auth.user.id)
+    .maybeSingle();
 
-    if (!profile) return fail('no_profile');
-
-    if (!profile.is_active) {
+  if (admin) {
+    if (!admin.is_active) {
       await writeAudit(db, {
-        actorLabel: input.username,
-        actorRole: profile.role,
+        actorLabel: email,
+        actorRole: admin.role,
         entityType: 'auth',
         action: 'login_blocked_inactive',
         ip,
@@ -111,10 +103,10 @@ async function postHandler(request) {
 
     await db.rpc('auth_reset_failures', { p_identifier: identifier });
     await writeAudit(db, {
-      actorLabel: input.username,
-      actorRole: profile.role,
+      actorLabel: email,
+      actorRole: admin.role,
       entityType: 'auth',
-      entityId: profile.id,
+      entityId: admin.id,
       action: 'login',
       ip,
       userAgent: ua,
@@ -123,28 +115,28 @@ async function postHandler(request) {
     return json(
       {
         session: auth.session,
-        role: profile.role,
-        displayName: profile.display_name,
-        mustChangePassword: profile.must_change_password,
-        // A generated temporary password is a shared secret until its owner
-        // replaces it, so nothing else is reachable until they do.
-        redirect: profile.must_change_password
-          ? '/change-password'
-          : profile.role === 'super_admin'
-            ? '/admin/global-board'
-            : '/schedules',
+        role: admin.role, // 'super_admin'
+        displayName: admin.display_name,
+        redirect: '/admin/global-board',
       },
       200,
     );
   }
 
+  const { data: profile } = await db
+    .from('students')
+    .select('id, full_name, is_active')
+    .eq('auth_uid', auth.user.id)
+    .maybeSingle();
+
+  if (!profile || profile.is_active === false) return fail('no_profile');
+
   await db.rpc('auth_reset_failures', { p_identifier: identifier });
   await writeAudit(db, {
-    actorLabel: student.full_name,
+    actorLabel: profile.full_name,
     actorRole: 'student',
-    scheduleId: student.schedule_id,
     entityType: 'auth',
-    entityId: student.id,
+    entityId: profile.id,
     action: 'login',
     ip,
     userAgent: ua,
@@ -153,10 +145,10 @@ async function postHandler(request) {
   return json(
     {
       session: auth.session,
-      role: 'student',
-      displayName: student.full_name,
-      mustChangePassword: student.must_change_password,
-      redirect: student.must_change_password ? '/change-password' : '/today',
+      role: 'student', // internal token for a normal user
+      displayName: profile.full_name,
+      studentId: profile.id,
+      redirect: '/today',
     },
     200,
   );
