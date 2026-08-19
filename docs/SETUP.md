@@ -1,25 +1,72 @@
-# Setup and deployment
+# Setup and deployment — كلّما عرفته
 
-Everything below is a one-time setup. It takes about 20 minutes.
+A one-time setup, ~20 minutes. The app is a single-program, self-registration tracker:
+users create their own accounts (email + password + a verification email), do daily tasks and
+persistent read/listen assignments for points, and appear on a leaderboard **by emoji only**.
+Admins manage tasks/assignments, see the users list (names, no points), can reveal a name on
+the leaderboard behind a confirmation, create other admins, and can switch to the normal user
+view of their own account.
 
 ---
 
 ## 1. Create the Supabase project
 
-1. Go to [supabase.com/dashboard](https://supabase.com/dashboard) → **New project**.
-2. Name it `tracker`, choose a strong database password, and pick the region closest to
-   your users (**Middle East (Bahrain)** or **Europe (Frankfurt)** for Saudi Arabia).
-3. Wait for provisioning, then open **Project Settings → API** and copy three values:
+1. [supabase.com/dashboard](https://supabase.com/dashboard) → **New project**.
+2. Name it `kollama`, set a strong DB password, pick the closest region
+   (**Middle East (Bahrain)** or **Europe (Frankfurt)** for Saudi Arabia).
+3. **Project Settings → API**, copy:
    - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
    - **anon public** key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - **service_role** key → `SUPABASE_SERVICE_ROLE_KEY` (**server only — never share it**)
+   - **service_role** key → `SUPABASE_SERVICE_ROLE_KEY` (**server only — never expose it**)
 
 ## 2. Run the migrations
 
-Follow [`supabase/README.md`](../supabase/README.md): run the eight SQL files in order,
-create the `mohammed` super admin, and apply the auth settings and the daily archive job.
+In **SQL Editor**, run every file in `supabase/migrations/` **in filename order**, from
+`0001_schema.sql` through `0025_admin_mgmt.sql`. Each is safe to run once, top to bottom.
 
-## 3. Run it locally (optional but recommended)
+The redesign migrations (`0021`–`0025`) add: the single program, emoji/email profile columns,
+the `handle_new_user` trigger (auto-creates a profile on sign-up), the task tables, the
+de-identified leaderboard functions, their RLS, and `provision_admin`.
+
+## 3. Turn on email verification + redirect URLs
+
+**Authentication → Providers → Email:** enable **Confirm email** so a new user must click the
+link before they can sign in.
+
+**Authentication → URL Configuration:**
+- **Site URL** → your deployed URL (e.g. `https://kollama.vercel.app`); use
+  `http://localhost:3000` while developing.
+- **Redirect URLs** → add both `https://YOUR-DOMAIN/login` and `http://localhost:3000/login`
+  (registration sends the confirmation link back to `/login`).
+
+For real email delivery beyond low-volume testing, configure **custom SMTP** under
+**Authentication → Emails** — Supabase's built-in sender is rate-limited.
+
+## 4. Create the first admin
+
+Self-registration only makes normal users. Seed the first admin by hand:
+
+1. **Authentication → Users → Add user** — enter your email + a password, and tick
+   **Auto Confirm User**.
+2. In **SQL Editor**, run (replace the email):
+
+   ```sql
+   insert into app_users (id, username, display_name, role)
+   select id, 'admin', 'المشرف العام', 'super_admin'
+   from auth.users where email = 'you@example.com'
+   on conflict (id) do update set role = 'super_admin', is_active = true;
+
+   insert into students (auth_uid, schedule_id, full_name, emoji, email,
+                         must_change_password, is_active)
+   select id, app_program(), 'المشرف العام', '🛡️', email, false, true
+   from auth.users where email = 'you@example.com'
+   on conflict (auth_uid) do nothing;
+   ```
+
+After this you can sign in as the admin and create any further admins from
+**المشرفون** in the UI — no SQL needed.
+
+## 5. Run it locally (optional)
 
 Create `.env.local` in the project root:
 
@@ -27,7 +74,6 @@ Create `.env.local` in the project root:
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR-ANON-KEY
 SUPABASE_SERVICE_ROLE_KEY=YOUR-SERVICE-ROLE-KEY
-AUTH_EMAIL_DOMAIN=tracker.internal
 ```
 
 Then:
@@ -40,120 +86,80 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:3000/login> and sign in as `mohammed`.
+Open <http://localhost:3000/login>. Sign in as the admin, or open `/register` to make a user.
 
-## 4. Deploy to Vercel
+> `AUTH_EMAIL_DOMAIN` from the old build is **no longer used** — everyone now signs in with a
+> real email. `WEBAUTHN_RP_ID` is only needed if you add a custom domain (see §8).
+
+## 6. Push to GitHub & deploy to Vercel
 
 1. Push this repository to GitHub.
-2. [vercel.com/new](https://vercel.com/new) → import the repository. Vercel detects
-   Next.js automatically; leave the build settings alone.
-3. Under **Environment Variables**, add these — exactly these names, for
-   **Production, Preview, and Development**:
+2. [vercel.com/new](https://vercel.com/new) → import the repo. Next.js is detected; leave the
+   build settings alone.
+3. **Environment Variables** (Production, Preview, Development) — exactly these names:
 
    | Name | Value |
    |---|---|
    | `NEXT_PUBLIC_SUPABASE_URL` | your Supabase project URL |
-   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the anon / publishable key |
-   | `SUPABASE_SERVICE_ROLE_KEY` | the service-role / secret key |
-   | `AUTH_EMAIL_DOMAIN` | `tracker.internal` |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the anon key |
+   | `SUPABASE_SERVICE_ROLE_KEY` | the service-role key |
 
-   **Do not set `SUPABASE_TEST_*` in Vercel.** Those are read only by the local
-   database test suite; the app ignores them, and setting them instead of the
-   three above leaves every page failing with a server error.
-4. Deploy.
-5. Go back to Supabase → **Authentication → URL Configuration** and set the Site URL to
-   your new Vercel domain.
+   Do **not** set `SUPABASE_TEST_*` in Vercel — those are only for the local DB test suite.
+4. Deploy, then set the Supabase **Site URL** (§3) to the Vercel domain.
 
-## 5. First run — the order that works
+## 7. First run
 
-1. Sign in at `/login` as `mohammed`.
-2. **المشرفون** → create a manager account for each supervisor, then tick which schedules
-   each one runs. A manager can hold several schedules and a schedule can have several
-   managers.
-3. **الرحلات** → create a schedule. Leave **بدون تاريخ نهاية** ticked for an ongoing one.
-   Set the streak threshold, how many days back students may edit, and whether students
-   see the leaderboard.
-4. Add the groups (rooms). Each group gets its own join link if you want room-specific links.
-5. **البنود** → **نسخ من المكتبة** to pull in the standard items, then edit them or add
-   your own. Every question type supports custom points, and choice options can carry
-   negative points.
-6. **الطلاب** → **استيراد Excel**. Download the template first: it carries the columns
-   (`الاسم`, optionally `المجموعة`, `الجوال`, `الرمز`) and a dropdown on `المجموعة` listing
-   the groups you added in step 4, so each student's group is set in the file itself. Its
-   guidance sits above the table and is never imported, so there is nothing to delete.
-   After uploading you get a review screen: every name is listed, broken rows first
-   (empty name, a PIN that is not 6 digits, a phone that is not 8 digits, an unknown
-   group), and a one-word name is flagged as a warning you can accept. Phones are typed
-   as the 8-digit local number; `+973` is added when the WhatsApp link is built. Fix or delete rows
-   in place — the good ones import either way, so a bad row never costs you the upload.
-   **Print the PIN sheet immediately** — those temp PINs are never shown again.
-7. Share the join link (**الرحلات → رابط الرحلة**). Students pick their name, enter the
-   temp PIN, and are forced to choose their own 6-digit PIN.
+1. Sign in as the admin → you land on **المهام اليومية** (admin view).
+2. **المهام اليومية** → add the daily tasks (title, optional description, points). They reset
+   every day for every user.
+3. **المهام المستمرة** → add **قراءة** and **استماع** items (title, the text/instructions,
+   points). These stay on each user's list across days until they mark them done once. (The
+   actual audio for a listen item is shared in your WhatsApp community; the app item is just
+   the instruction + a "mark done" button.)
+4. Share the site URL. Users open **/register**, enter name + email + password, pick an emoji,
+   confirm the email, then sign in and start earning points.
+5. **لوحة الصدارة** shows everyone by emoji + points. Tap a row → confirm → the name is
+   revealed (admin only). **المستخدمون** lists all users with names/emails/emoji and their
+   completion counts — no points — and a **CSV download**.
+6. **⇄ وضع المستخدم** (top of the admin nav) switches you into the normal user app for your own
+   account; **⇄ وضع المشرف** switches back.
 
-## 6. Installing it as a phone app
+## 8. Install as a phone app (PWA)
 
-The site is a PWA, so it installs from the browser with no app store.
+- **Android / Chrome:** site → menu (⋮) → **Add to Home screen**.
+- **iPhone / Safari:** site → Share → **Add to Home Screen** (Safari only).
 
-- **Android / Chrome:** open the site → menu (⋮) → **Add to Home screen** / **Install app**.
-- **iPhone / Safari:** open the site → Share → **Add to Home Screen**. iOS only offers
-  this in Safari, not Chrome.
+## 9. Biometric login
 
-Once installed it opens full-screen with no browser chrome, keeps working offline, and
-carries the app icon. Long-pressing the icon on Android gives shortcuts straight to
-**سجل اليوم** and **لوحة الصدارة**.
+Any user or admin can add a fingerprint/Face ID to sign in without typing the password (the
+password still works):
 
-## 7. Turning on biometric login for staff
+1. Sign in, go to **الإعدادات → الدخول بالبصمة → تفعيل البصمة على هذا الجهاز**.
+2. Confirm with the device prompt and name the device.
 
-Managers and admins can sign in with a fingerprint or face instead of typing their
-password. The password keeps working — this is an addition, not a replacement.
-
-1. Sign in with username and password as usual.
-2. Go to **حسابي → الدخول بالبصمة → تفعيل البصمة على هذا الجهاز**.
-3. Confirm with the device's fingerprint/face prompt and give the device a name.
-
-From then on the login screen shows **الدخول بالبصمة**. Each device is enrolled
-separately, and any device can be revoked from the same screen.
-
-Requirements: HTTPS (Vercel gives you this), and a device with a fingerprint sensor,
-Face ID, or Windows Hello. If the button does not appear, the device does not support it.
-
-On Vercel the passkey domain is detected automatically. **If you add a custom domain,**
-set `WEBAUTHN_RP_ID` to that bare hostname (e.g. `tracker.example.com`, no `https://`)
-and redeploy — passkeys are bound to one domain and will not work on another.
-
-## 8. Verifying it works
-
-- Open the join link on a phone, log in as a test student, tick a few items.
-- Turn on airplane mode, tick more items, close and reopen the app — the ticks are still
-  there and the amber offline banner shows the queue.
-- Turn the network back on and watch the queue drain.
-- Back in the manager view, the points appear on the leaderboard.
+Requirements: HTTPS (Vercel provides it) and a device with a biometric sensor. On a **custom
+domain**, set `WEBAUTHN_RP_ID` to the bare hostname (e.g. `kollama.example.com`) and redeploy.
 
 ---
 
 ## Troubleshooting
 
-**Start here: open `/api/health` on your deployment.** It reports which
-credentials the running build can actually see (names and booleans only — never a
-key), whether the database answers, and which commit is deployed. Almost every
-"it does not work" turns out to be visible there in one glance.
+**Start at `/api/health`** — it reports which credentials the build can see (names/booleans
+only), whether the DB answers, and the deployed commit.
 
-**"بيانات الدخول غير صحيحة" for a user you just created.**
-Check that the auth user exists in **Authentication → Users** and that the matching row
-exists in `app_users` (staff) or `students` (students). Both are required.
+**"يرجى تأكيد بريدك الإلكتروني أولاً" on login.** The user hasn't clicked the verification
+link. The login screen offers **إعادة إرسال رسالة التأكيد**. Check spam, and confirm SMTP /
+the built-in sender isn't rate-limited.
 
-**"تم إيقاف الحساب مؤقتاً".**
-Five failed attempts triggers a 15-minute lockout that doubles on repeat. To clear it:
+**A new sign-up can log in but has no profile.** The `handle_new_user` trigger creates the
+profile from the sign-up metadata; confirm migration `0021` ran and the trigger
+`on_auth_user_created` exists on `auth.users`.
+
+**"تم إيقاف الحساب مؤقتاً".** Five failed attempts → a 15-minute lockout that doubles. Clear it:
 
 ```sql
-select auth_reset_failures('staff:mohammed');
+select auth_reset_failures('email:you@example.com');
 ```
 
-**Students see an empty day.**
-Their questions either have not been added to that schedule yet, or every question is
-restricted to weekdays that do not include today.
-
-**A student cannot edit an old day.**
-That is the backfill window doing its job. Raise **أيام التعديل بأثر رجعي** in the
-schedule settings, or make the correction yourself — staff edits are unrestricted and are
-recorded in the audit log.
+**Users see an empty day.** No active daily tasks/assignments yet — add them under the admin
+**المهام اليومية** / **المهام المستمرة** screens.
