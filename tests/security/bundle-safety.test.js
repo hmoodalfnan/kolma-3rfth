@@ -141,11 +141,15 @@ describe('database migrations', () => {
 
   it('ships every migration file', () => {
     // Consolidated from 25 numbered files into 3 ordered bundles (greenfield):
-    // base schema, platform features, and the self-serve/tasks redesign.
+    // base schema, platform features, and the self-serve/tasks redesign. Later
+    // additive migrations (daily-task fields, reviving the questions engine)
+    // append in order.
     expect(sql.map((s) => s.name)).toEqual([
       '0001_base.sql',
       '0002_features.sql',
       '0003_redesign.sql',
+      '0004_daily_task_fields.sql',
+      '0005_revive_questions.sql',
     ]);
   });
 

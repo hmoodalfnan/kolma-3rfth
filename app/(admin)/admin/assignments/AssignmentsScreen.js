@@ -157,11 +157,11 @@ export function AssignmentsScreen() {
             <Input id="a-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </Field>
           <Field
-            label="المحتوى"
+            label="الوصف (اختياري)"
             htmlFor="a-body"
-            hint={form.kind === 'read' ? 'النص الذي سيقرؤه المستخدم داخل التطبيق.' : 'تعليمات الاستماع (المقطع يُرسل في مجتمع الواتساب).'}
+            hint="وصف مختصر يظهر تحت العنوان — المحتوى نفسه (المقطع أو النص) يُرسل في مجتمع الواتساب."
           >
-            <Textarea id="a-body" className="min-h-40" value={form.body_text} onChange={(e) => setForm({ ...form, body_text: e.target.value })} />
+            <Textarea id="a-body" className="min-h-24" value={form.body_text} onChange={(e) => setForm({ ...form, body_text: e.target.value })} />
           </Field>
           <Field label="النقاط" htmlFor="a-points">
             <NumberInput id="a-points" value={form.points} onChange={(e) => setForm({ ...form, points: e.target.value })} />

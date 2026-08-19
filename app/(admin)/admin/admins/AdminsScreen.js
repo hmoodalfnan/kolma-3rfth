@@ -19,6 +19,12 @@ export function AdminsScreen() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
 
+  // "Promote an existing user" flow: pick a registered user, grant the role.
+  const [promoteOpen, setPromoteOpen] = useState(false);
+  const [candidates, setCandidates] = useState(null);
+  const [search, setSearch] = useState('');
+  const [promoting, setPromoting] = useState(null);
+
   async function reload() {
     const { data, error: e } = await getBrowserClient()
       .from('app_users')
@@ -28,14 +34,58 @@ export function AdminsScreen() {
     if (e) {
       setError('تعذّر تحميل المشرفين');
       setAdmins([]);
-    } else {
-      setAdmins(data || []);
+      return [];
     }
+    setAdmins(data || []);
+    return data || [];
   }
 
   useEffect(() => {
     reload();
   }, []);
+
+  // Registered users who are not already admins, for the promote picker.
+  async function openPromote() {
+    setSearch('');
+    setCandidates(null);
+    setPromoteOpen(true);
+    const adminIds = new Set((admins || []).map((a) => a.id));
+    const { data, error: e } = await getBrowserClient()
+      .from('students')
+      .select('auth_uid, full_name, email, emoji')
+      .eq('is_active', true)
+      .order('full_name');
+    if (e) {
+      setError('تعذّر تحميل المستخدمين');
+      setCandidates([]);
+      return;
+    }
+    setCandidates((data || []).filter((u) => u.auth_uid && !adminIds.has(u.auth_uid)));
+  }
+
+  async function promote(user) {
+    setError('');
+    setPromoting(user.auth_uid);
+    try {
+      await post('/api/admins/promote', { userId: user.auth_uid });
+      const fresh = await reload();
+      const freshIds = new Set(fresh.map((a) => a.id));
+      setCandidates((rows) => (rows || []).filter((u) => !freshIds.has(u.auth_uid)));
+    } catch (err) {
+      setError(err.message || 'تعذّر ترقية المستخدم');
+    } finally {
+      setPromoting(null);
+    }
+  }
+
+  const filtered = (candidates || []).filter((u) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (u.full_name || '').toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q)
+    );
+  });
 
   async function save() {
     setError('');
@@ -65,7 +115,10 @@ export function AdminsScreen() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-brand">المشرفون</h1>
-        <Button onClick={() => { setForm(EMPTY); setOpen(true); }}>+ مشرف جديد</Button>
+        <div className="flex gap-2">
+          <Button tone="outline" onClick={openPromote}>ترقية مستخدم</Button>
+          <Button onClick={() => { setForm(EMPTY); setOpen(true); }}>+ مشرف جديد</Button>
+        </div>
       </div>
       <p className="text-sm text-muted">
         المشرف يملك كل الصلاحيات، وهو أيضاً مستخدم عادي يمكنه التبديل إلى وضع المستخدم.
@@ -106,6 +159,56 @@ export function AdminsScreen() {
           <ModalActions>
             <Button loading={saving} onClick={save}>إنشاء</Button>
             <Button tone="ghost" onClick={() => setOpen(false)}>إلغاء</Button>
+          </ModalActions>
+        </div>
+      </Modal>
+
+      <Modal
+        open={promoteOpen}
+        onClose={() => setPromoteOpen(false)}
+        title="ترقية مستخدم موجود"
+        description="امنح صلاحيات المشرف لمستخدم أنشأ حسابه بنفسه — لا حاجة لبريد أو كلمة مرور جديدة."
+        size="md"
+      >
+        <div className="space-y-3">
+          <Field label="بحث" htmlFor="pr-search">
+            <Input
+              id="pr-search"
+              placeholder="ابحث بالاسم أو البريد"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </Field>
+
+          {candidates === null ? (
+            <SkeletonList rows={5} />
+          ) : filtered.length === 0 ? (
+            <EmptyState>
+              {candidates.length === 0 ? 'كل المستخدمين مشرفون بالفعل.' : 'لا نتائج مطابقة.'}
+            </EmptyState>
+          ) : (
+            <ul className="max-h-80 space-y-2 overflow-y-auto">
+              {filtered.map((u) => (
+                <li key={u.auth_uid} className="card flex items-center gap-3 p-3">
+                  <span className="text-lg" aria-hidden="true">{u.emoji || '👤'}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-ink">{u.full_name}</span>
+                    {u.email && <span className="block truncate text-xs text-muted" dir="ltr">{u.email}</span>}
+                  </span>
+                  <Button
+                    className="min-h-0 shrink-0 px-3 py-1.5 text-xs"
+                    loading={promoting === u.auth_uid}
+                    onClick={() => promote(u)}
+                  >
+                    ترقية
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <ModalActions>
+            <Button tone="ghost" onClick={() => setPromoteOpen(false)}>إغلاق</Button>
           </ModalActions>
         </div>
       </Modal>

@@ -3,6 +3,9 @@
 import { useToday } from '@/lib/tasks/useToday';
 import { earnedToday, earnedAssignments } from '@/lib/tasks/queries';
 import { SkeletonList } from '@/components/ui/Skeleton';
+import { QuestionCard } from '@/components/questions';
+import { groupBySection } from '@/lib/questions/active';
+import { dayPoints } from '@/lib/points/score';
 
 const KIND = {
   read: { label: 'قراءة', icon: '📖' },
@@ -54,11 +57,14 @@ export function DailySheet() {
     ctxStatus,
     dailyTasks,
     assignments,
+    questions,
     doneTasks,
     doneAssignments,
+    answers,
     error,
     toggleTask,
     toggleAssignment,
+    saveAnswer,
   } = useToday();
 
   if (ctxStatus === 'unauthenticated') {
@@ -73,7 +79,12 @@ export function DailySheet() {
     );
   }
 
-  const earned = earnedToday(dailyTasks, doneTasks) + earnedAssignments(assignments, doneAssignments);
+  const earned =
+    earnedToday(dailyTasks, doneTasks) +
+    earnedAssignments(assignments, doneAssignments) +
+    dayPoints(questions, answers).earned;
+
+  const questionGroups = groupBySection(questions);
 
   return (
     <div className="space-y-6 pt-2">
@@ -92,6 +103,30 @@ export function DailySheet() {
         <p role="alert" className="rounded-lg bg-danger-soft p-2 text-center text-sm text-danger-ink">
           {error}
         </p>
+      )}
+
+      {questions.length > 0 && (
+        <section className="space-y-4">
+          <h2 className="px-1 text-sm font-bold text-muted">البنود اليومية</h2>
+          {questionGroups.map(({ section, items }) => (
+            <div key={section} className="space-y-2">
+              {section && section !== 'عام' && (
+                <h3 className="px-1 text-xs font-bold text-brand">{section}</h3>
+              )}
+              <ul className="space-y-3">
+                {items.map((q) => (
+                  <li key={q.id} className="card p-3">
+                    <QuestionCard
+                      question={q}
+                      value={answers[q.id]}
+                      onChange={(v) => saveAnswer(q, v)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </section>
       )}
 
       <section className="space-y-4">

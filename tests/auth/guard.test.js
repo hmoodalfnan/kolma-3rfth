@@ -4,7 +4,7 @@ import { homeFor, canAccess } from '@/lib/auth/guard';
 describe('homeFor', () => {
   it('routes each role to its landing page', () => {
     expect(homeFor('student')).toBe('/today');
-    expect(homeFor('super_admin')).toBe('/admin/daily-tasks');
+    expect(homeFor('super_admin')).toBe('/admin/questions');
   });
 
   it('sends an unknown or missing role to login', () => {

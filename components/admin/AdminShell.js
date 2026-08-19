@@ -8,7 +8,8 @@ import { BrandLogo } from '@/components/ui/BrandLogo';
 import { ViewSwitch } from '@/components/admin/ViewSwitch';
 
 const TABS = [
-  { href: '/admin/daily-tasks', label: 'المهام اليومية' },
+  { href: '/admin/questions', label: 'البنود اليومية' },
+  { href: '/admin/daily-tasks', label: 'المهام السريعة' },
   { href: '/admin/assignments', label: 'المهام المستمرة' },
   { href: '/admin/users', label: 'المستخدمون' },
   { href: '/admin/leaderboard', label: 'لوحة الصدارة' },

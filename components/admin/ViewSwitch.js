@@ -21,7 +21,7 @@ export function ViewSwitch({ mode }) {
 
   if (!isAdmin) return null;
 
-  const target = mode === 'admin' ? '/today' : '/admin/daily-tasks';
+  const target = mode === 'admin' ? '/today' : '/admin/questions';
   const label = mode === 'admin' ? 'وضع المستخدم' : 'وضع المشرف';
 
   return (

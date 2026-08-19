@@ -1,7 +1,7 @@
 # Database setup
 
 Run the migrations **in order** in **Supabase Dashboard → SQL Editor → New query**.
-Paste one file, press Run, wait for `Success`, then move to the next. There are four:
+Paste one file, press Run, wait for `Success`, then move to the next. There are five:
 
 1. `0001_base.sql` — schema, scoring/identity functions, RLS, rate-limit + audit log, seed,
    leaderboard views, transactional grants.
@@ -17,10 +17,15 @@ Paste one file, press Run, wait for `Success`, then move to the next. There are 
 4. `0004_daily_task_fields.sql` — adds `category` and an optional `active_from`/`active_to`
    date window to `daily_tasks`, so the admin can group daily tasks by section and schedule
    when they appear (mirrors the old question builder).
+5. `0005_revive_questions.sql` — folds `answers.points` into the leaderboard's `user_points`
+   view, reactivating the rich **بنود (questions)** engine (all 7 types + server-side scoring)
+   alongside the simple task model. The questions/answers tables, scoring trigger, window
+   trigger, and RLS already exist from `0001`/`0002`; this only makes their points count.
 
-(These were consolidated from 25 numbered migrations — identical end state. The
-questions/grading tables built in `0001`/`0002` are left dormant under default-deny RLS;
-nothing in the current UI reads them.)
+(The first three were consolidated from 25 numbered migrations — identical end state. The
+`questions`/`answers` tables built in `0001`/`0002` were dormant until `0005` reconnected
+them to the UI. The remaining grading tables — `criteria`, `point_events`, `groups` — stay
+unused by the current single-program UI.)
 
 ## Auth settings
 
