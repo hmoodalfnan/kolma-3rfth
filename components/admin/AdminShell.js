@@ -14,6 +14,7 @@ const TABS = [
   { href: '/admin/emojis', label: 'الرموز' },
   { href: '/admin/leaderboard', label: 'لوحة الصدارة' },
   { href: '/admin/admins', label: 'المشرفون' },
+  { href: '/admin/settings', label: 'الإعدادات' },
 ];
 
 export function AdminShell({ children }) {
