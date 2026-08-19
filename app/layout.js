@@ -28,6 +28,19 @@ export const metadata = {
     title: 'كلّما عرفته',
     statusBarStyle: 'black-translucent',
   },
+  openGraph: {
+    title: 'كلّما عرفته',
+    description: 'متابعة الأعمال اليومية والمهام',
+    type: 'website',
+    locale: 'ar',
+    images: [{ url: '/icon-512.png', width: 512, height: 512, alt: 'كلّما عرفته' }],
+  },
+  twitter: {
+    card: 'summary',
+    title: 'كلّما عرفته',
+    description: 'متابعة الأعمال اليومية والمهام',
+    images: ['/icon-512.png'],
+  },
   formatDetection: { telephone: false },
 };
 

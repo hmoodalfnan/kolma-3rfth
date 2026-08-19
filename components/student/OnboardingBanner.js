@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useToast } from '@/components/ui/Toast';
+import { biometricAvailable, registerPasskey } from '@/lib/webauthn/client';
 
 const DISMISS_KEY = 'onboard_dismissed_v1';
 
@@ -20,19 +21,25 @@ function isIOS() {
 
 /**
  * A one-time, dismissible nudge at the top of the student area: turn on
- * fingerprint/Face login, and add the app to the home screen. It remembers the
- * dismissal, hides the install tip once the app already runs standalone, and
- * offers the native install prompt on browsers that support it.
+ * fingerprint/Face login (enrolled inline, right from the banner), and install
+ * the app. It remembers the dismissal, hides the install tip once the app runs
+ * standalone, and uses the native install prompt where the browser supports it.
  */
 export function OnboardingBanner() {
+  const toast = useToast();
   const [show, setShow] = useState(false);
   const [installed, setInstalled] = useState(false);
   const [deferred, setDeferred] = useState(null);
+  const [bioSupported, setBioSupported] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
+  const [bioDone, setBioDone] = useState(false);
+  const [showManual, setShowManual] = useState(false);
 
   useEffect(() => {
     if (localStorage.getItem(DISMISS_KEY)) return;
     setInstalled(isStandalone());
     setShow(true);
+    biometricAvailable().then(setBioSupported);
   }, []);
 
   useEffect(() => {
@@ -54,11 +61,33 @@ export function OnboardingBanner() {
     setShow(false);
   }
 
+  async function enableBiometric() {
+    setBioBusy(true);
+    try {
+      await registerPasskey('جهازي');
+      setBioDone(true);
+      toast.push('تم تفعيل الدخول بالبصمة', 'success');
+    } catch (err) {
+      if (err?.name === 'NotAllowedError' || err?.name === 'AbortError') return; // user cancelled
+      if (/مسجَّل بالفعل|already/i.test(err?.message || '')) {
+        setBioDone(true);
+        toast.push('هذا الجهاز مُفعّل بالفعل', 'success');
+        return;
+      }
+      toast.push(err?.message || 'تعذّر تفعيل البصمة', 'error');
+    } finally {
+      setBioBusy(false);
+    }
+  }
+
   async function install() {
-    if (!deferred) return;
-    deferred.prompt();
-    await deferred.userChoice.catch(() => {});
-    setDeferred(null);
+    if (deferred) {
+      deferred.prompt();
+      await deferred.userChoice.catch(() => {});
+      setDeferred(null);
+      return;
+    }
+    setShowManual(true); // no native prompt (iOS/Safari): show the manual steps
   }
 
   if (!show) return null;
@@ -77,43 +106,55 @@ export function OnboardingBanner() {
           ✕
         </button>
 
-        <p className="mb-2 pe-6 text-sm font-bold text-brand">لتسهيل استخدامك للتطبيق</p>
+        <p className="mb-3 pe-6 text-sm font-bold text-brand">لتسهيل استخدامك للتطبيق</p>
 
-        <ul className="space-y-2.5 text-sm">
-          <li className="flex items-start gap-2">
-            <span aria-hidden="true" className="text-lg leading-none">🔐</span>
-            <span className="flex-1">
-              <span className="text-ink">فعّل الدخول ببصمتك لتسجيل دخول أسرع.</span>{' '}
-              <Link href="/settings" prefetch className="font-semibold text-brand underline">
-                تفعيل الآن
-              </Link>
-            </span>
-          </li>
+        <div className="space-y-2.5 text-sm">
+          {bioSupported && (
+            <div className="flex items-center gap-2">
+              <span aria-hidden="true" className="text-lg leading-none">🔐</span>
+              <span className="flex-1 text-ink">الدخول ببصمتك بدل كلمة المرور.</span>
+              {bioDone ? (
+                <span className="shrink-0 text-sm font-semibold text-brand">مُفعّل ✓</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={enableBiometric}
+                  disabled={bioBusy}
+                  className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:opacity-90 disabled:opacity-60"
+                >
+                  {bioBusy ? '...' : 'تفعيل'}
+                </button>
+              )}
+            </div>
+          )}
 
           {showInstall && (
-            <li className="flex items-start gap-2">
+            <div className="flex items-center gap-2">
               <span aria-hidden="true" className="text-lg leading-none">📲</span>
-              <span className="flex-1">
-                <span className="text-ink">أضِف التطبيق إلى شاشتك الرئيسية.</span>{' '}
-                {deferred ? (
-                  <button
-                    type="button"
-                    onClick={install}
-                    className="font-semibold text-brand underline"
-                  >
-                    تثبيت
-                  </button>
-                ) : isIOS() ? (
-                  <span className="text-muted">
-                    من زر المشاركة <span aria-hidden="true">⬆️</span> اختر «إضافة إلى الشاشة الرئيسية».
-                  </span>
-                ) : (
-                  <span className="text-muted">من قائمة المتصفح اختر «إضافة إلى الشاشة الرئيسية».</span>
-                )}
-              </span>
-            </li>
+              <span className="flex-1 text-ink">تثبيت التطبيق على جهازك.</span>
+              <button
+                type="button"
+                onClick={install}
+                className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:opacity-90"
+              >
+                تثبيت
+              </button>
+            </div>
           )}
-        </ul>
+
+          {showInstall && showManual && (
+            <p className="rounded-lg bg-chip p-2 text-xs text-muted">
+              {isIOS() ? (
+                <>
+                  من زر المشاركة <span aria-hidden="true">⬆️</span> في المتصفح، اختر «إضافة إلى الشاشة
+                  الرئيسية».
+                </>
+              ) : (
+                <>من قائمة المتصفح (⋮) اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».</>
+              )}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

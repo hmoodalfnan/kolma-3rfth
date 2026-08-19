@@ -28,8 +28,12 @@ const schema = z.discriminatedUnion('action', [
   }).strict(),
 ]);
 
-/** Only staff may enrol a passkey; students share devices. */
-async function requireStaffUser(request) {
+/**
+ * Any signed-in account may enrol a passkey — admins (app_users) and self-serve
+ * students (students) alike. Returns a normalised profile with a stable username
+ * and display name for the WebAuthn options and the audit trail.
+ */
+async function requireUser(request) {
   const token = bearerToken(request);
   if (!token) return { response: json({ error: 'غير مصرح' }, 401) };
 
@@ -38,23 +42,49 @@ async function requireStaffUser(request) {
   if (error || !auth?.user) return { response: json({ error: 'غير مصرح' }, 401) };
 
   const db = createServiceClient();
-  const { data: profile } = await db
+
+  const { data: admin } = await db
     .from('app_users')
     .select('id, username, display_name, role, is_active')
     .eq('id', auth.user.id)
     .maybeSingle();
-
-  if (!profile || !profile.is_active) {
-    return { response: json({ error: 'هذه الميزة للمشرفين فقط' }, 403) };
+  if (admin) {
+    if (!admin.is_active) return { response: json({ error: 'الحساب معطّل' }, 403) };
+    return {
+      db,
+      user: auth.user,
+      profile: {
+        username: admin.username,
+        display_name: admin.display_name,
+        role: admin.role,
+      },
+    };
   }
 
-  return { db, profile, user: auth.user };
+  const { data: student } = await db
+    .from('students')
+    .select('id, full_name, email, is_active')
+    .eq('auth_uid', auth.user.id)
+    .maybeSingle();
+  if (student && student.is_active !== false) {
+    return {
+      db,
+      user: auth.user,
+      profile: {
+        username: student.email || `stu_${student.id}`,
+        display_name: student.full_name || 'مستخدم',
+        role: 'student',
+      },
+    };
+  }
+
+  return { response: json({ error: 'غير مصرح' }, 403) };
 }
 
 async function postHandler(request) {
   if (!sameOrigin(request)) return json({ error: 'طلب غير مسموح' }, 403);
 
-  const ctx = await requireStaffUser(request);
+  const ctx = await requireUser(request);
   if (ctx.response) return ctx.response;
   const { db, profile, user } = ctx;
 

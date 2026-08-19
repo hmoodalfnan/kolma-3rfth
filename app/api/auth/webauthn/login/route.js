@@ -123,13 +123,40 @@ async function postHandler(request) {
     return json({ error: GENERIC }, 401);
   }
 
-  const { data: profile } = await db
+  // The credential belongs to an admin (app_users) or a self-serve student
+  // (students). Resolve either into one identity for the session + audit.
+  let identity;
+  const { data: admin } = await db
     .from('app_users')
     .select('id, username, display_name, role, is_active')
     .eq('id', stored.user_id)
     .maybeSingle();
-
-  if (!profile || !profile.is_active) return json({ error: 'الحساب معطّل' }, 403);
+  if (admin) {
+    if (!admin.is_active) return json({ error: 'الحساب معطّل' }, 403);
+    identity = {
+      id: admin.id,
+      username: admin.username,
+      displayName: admin.display_name,
+      role: admin.role,
+      studentId: undefined,
+      redirect: admin.role === 'super_admin' ? '/admin/global-board' : '/schedules',
+    };
+  } else {
+    const { data: student } = await db
+      .from('students')
+      .select('id, full_name, email, is_active')
+      .eq('auth_uid', stored.user_id)
+      .maybeSingle();
+    if (!student || student.is_active === false) return json({ error: 'الحساب معطّل' }, 403);
+    identity = {
+      id: student.id,
+      username: student.email || `stu_${student.id}`,
+      displayName: student.full_name || 'مستخدم',
+      role: 'student',
+      studentId: student.id,
+      redirect: '/today',
+    };
+  }
 
   const { data: authUser } = await db.auth.admin.getUserById(stored.user_id);
   if (!authUser?.user?.email) return json({ error: GENERIC }, 401);
@@ -154,13 +181,15 @@ async function postHandler(request) {
     .update({ counter: newCounter, last_used_at: new Date().toISOString() })
     .eq('id', stored.id);
 
-  await db.rpc('auth_reset_failures', { p_identifier: `staff:${profile.username}` });
+  await db.rpc('auth_reset_failures', {
+    p_identifier: identity.role === 'student' ? `email:${identity.username}` : `staff:${identity.username}`,
+  });
 
   await writeAudit(db, {
-    actorLabel: profile.username,
-    actorRole: profile.role,
+    actorLabel: identity.username,
+    actorRole: identity.role,
     entityType: 'auth',
-    entityId: profile.id,
+    entityId: identity.id,
     action: 'login_passkey',
     ip,
     userAgent: ua,
@@ -169,10 +198,11 @@ async function postHandler(request) {
   return json(
     {
       session: session.data.session,
-      role: profile.role,
-      displayName: profile.display_name,
+      role: identity.role,
+      displayName: identity.displayName,
+      studentId: identity.studentId,
       mustChangePassword: false,
-      redirect: profile.role === 'super_admin' ? '/admin/global-board' : '/schedules',
+      redirect: identity.redirect,
     },
     200,
   );

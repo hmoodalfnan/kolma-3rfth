@@ -193,12 +193,7 @@ export function DailySheet() {
           today. One compact tappable row each; points count on top of 100%. */}
       {isToday && asg.status === 'ready' && asg.assignments.length > 0 && (
         <section className="space-y-2">
-          <div className="px-1">
-            <h2 className="text-sm font-bold text-muted">مهام المجموعة</h2>
-            <p className="text-xs text-muted">
-              مهام مُرسَلة في المجموعة، تبقى معك من يوم لآخر حتى تُنهيها، ونقاطها إضافية فوق الـ100%.
-            </p>
-          </div>
+          <h2 className="px-1 text-sm font-bold text-muted">مهام المجموعة</h2>
           <ul className="space-y-2">
             {asg.assignments.map((a) => {
               const done = asg.done.has(a.id);
