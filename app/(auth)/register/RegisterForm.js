@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { EmojiPicker } from '@/components/ui/EmojiPicker';
@@ -10,6 +11,7 @@ import { registerSchema } from '@/lib/validation/auth';
 import { siteUrl } from '@/lib/config/site';
 
 export function RegisterForm() {
+  const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,13 +32,14 @@ export function RegisterForm() {
 
     setBusy(true);
     try {
-      const { error: signUpError } = await getBrowserClient().auth.signUp({
+      const { data, error: signUpError } = await getBrowserClient().auth.signUp({
         email: parsed.data.email,
         password: parsed.data.password,
         options: {
           data: { full_name: parsed.data.fullName, emoji: parsed.data.emoji },
-          // Always the production origin (not localhost/preview) so the link in
-          // the email works on any device and lands the confirmed user in the app.
+          // Only used when email confirmation is on: always the production origin
+          // (not localhost/preview) so the link works on any device and lands the
+          // confirmed user in the app.
           emailRedirectTo: `${siteUrl()}/today`,
         },
       });
@@ -47,6 +50,14 @@ export function RegisterForm() {
             ? 'هذا البريد مسجّل بالفعل'
             : signUpError.message || 'تعذّر إنشاء الحساب',
         );
+        return;
+      }
+
+      // With email confirmation disabled, signUp returns an active session — the
+      // account is ready, so go straight into the app. With it enabled there is no
+      // session yet, so fall back to the "check your email" screen.
+      if (data?.session) {
+        router.replace('/today');
         return;
       }
 
