@@ -3,6 +3,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { OfflineBanner } from '@/components/offline/OfflineBanner';
 import { StudentNav } from '@/components/student/StudentNav';
 import { StudentTopBar } from '@/components/student/StudentTopBar';
+import { OnboardingBanner } from '@/components/student/OnboardingBanner';
 
 export default function StudentLayout({ children }) {
   return (
@@ -10,6 +11,7 @@ export default function StudentLayout({ children }) {
       <ToastProvider>
         <OfflineBanner />
         <StudentTopBar />
+        <OnboardingBanner />
         <div className="mx-auto w-full max-w-2xl px-4 pb-24 pt-2">{children}</div>
         <StudentNav />
       </ToastProvider>

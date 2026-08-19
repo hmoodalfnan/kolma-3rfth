@@ -9,7 +9,7 @@ import { ViewSwitch } from '@/components/admin/ViewSwitch';
 
 const TABS = [
   { href: '/admin/questions', label: 'البنود اليومية' },
-  { href: '/admin/assignments', label: 'المهام المستمرة' },
+  { href: '/admin/assignments', label: 'مهام المجموعة' },
   { href: '/admin/users', label: 'المستخدمون' },
   { href: '/admin/emojis', label: 'الرموز' },
   { href: '/admin/leaderboard', label: 'لوحة الصدارة' },

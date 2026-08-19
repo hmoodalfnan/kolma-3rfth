@@ -97,11 +97,11 @@ export function AssignmentsScreen() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-brand">المهام المستمرة</h1>
+        <h1 className="text-xl font-bold text-brand">مهام المجموعة</h1>
         <Button onClick={openNew}>+ مهمة جديدة</Button>
       </div>
       <p className="text-sm text-muted">
-        مهام «قراءة» و«استماع» تبقى في قائمة المستخدم عبر الأيام حتى ينهيها.
+        المهام التي تُرسَل في مجموعة المشاركين — تبقى في قائمة المستخدم وتنتقل معه من يوم إلى آخر حتى ينهيها.
       </p>
 
       <ErrorText>{error}</ErrorText>
@@ -109,7 +109,7 @@ export function AssignmentsScreen() {
       {items === null ? (
         <SkeletonList rows={3} />
       ) : items.length === 0 ? (
-        <EmptyState>لا توجد مهام مستمرة بعد.</EmptyState>
+        <EmptyState>لا توجد مهام مجموعة بعد.</EmptyState>
       ) : (
         <ul className="space-y-2">
           {items.map((a) => (
@@ -143,7 +143,7 @@ export function AssignmentsScreen() {
       <Modal
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={editing === 'new' ? 'مهمة مستمرة جديدة' : 'تعديل المهمة'}
+        title={editing === 'new' ? 'مهمة مجموعة جديدة' : 'تعديل المهمة'}
         size="md"
       >
         <div className="space-y-3">

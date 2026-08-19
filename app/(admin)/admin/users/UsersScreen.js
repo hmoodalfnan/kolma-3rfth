@@ -14,7 +14,7 @@ function tally(rows, key) {
 }
 
 function toCsv(users) {
-  const header = ['الاسم', 'البريد', 'الرمز', 'الحالة', 'تاريخ الانضمام', 'مهام مستمرة منجزة'];
+  const header = ['الاسم', 'البريد', 'الرمز', 'الحالة', 'تاريخ الانضمام', 'مهام المجموعة المنجزة'];
   const esc = (v) => {
     const s = String(v ?? '');
     // Neutralise spreadsheet formula injection, then CSV-quote.
@@ -131,7 +131,7 @@ export function UsersScreen() {
                 <th className="p-3 text-start font-semibold">الاسم</th>
                 <th className="p-3 text-start font-semibold">البريد</th>
                 <th className="p-3 text-start font-semibold">الانضمام</th>
-                <th className="p-3 text-center font-semibold">مستمرة</th>
+                <th className="p-3 text-center font-semibold">المجموعة</th>
                 <th className="p-3 text-center font-semibold">إجراءات</th>
               </tr>
             </thead>

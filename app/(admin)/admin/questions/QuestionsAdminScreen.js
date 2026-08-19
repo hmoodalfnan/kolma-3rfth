@@ -87,7 +87,7 @@ export function QuestionsAdminScreen() {
         <Button onClick={() => setEditing('new')}>+ بند جديد</Button>
       </div>
       <p className="text-sm text-muted">
-        بنود غنيّة (نعم/لا، لكل صلاة، عدّاد، اختيار، تقييم…) يجيب عنها المستخدم كل يوم وتُحتسب نقاطها تلقائياً.
+        المهام اليومية التي على المستخدم أداؤها كل يوم وتتكرّر يومياً — تتنوّع صيغها (نعم/لا، لكل صلاة، عدّاد، اختيار، تقييم…) وتُحتسب نقاطها تلقائياً.
       </p>
 
       <ErrorText>{error}</ErrorText>

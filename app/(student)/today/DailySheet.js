@@ -81,20 +81,18 @@ export function DailySheet() {
   const sections = groupBySection(day.questions);
   const showStreak = ctx.schedule?.show_streak !== false;
 
-  // المهام المستمرة count toward today's points (they are "ongoing", so their
-  // points land on the day you complete them). Fold them into the day total and
-  // the ring only while viewing today.
+  // البنود اليومية round up to 100%. مهام المجموعة are a bonus counted ON TOP of
+  // that, so completing them pushes the day total above 100% (only on today,
+  // since they are not tied to a past day).
   const asgReady = asg.status === 'ready';
   const includeAsg = isToday && asgReady;
   const asgEarned = includeAsg
     ? asg.assignments.reduce((s, a) => (asg.done.has(a.id) ? s + Number(a.points || 0) : s), 0)
     : 0;
-  const asgPossible = includeAsg
-    ? asg.assignments.reduce((s, a) => s + Number(a.points || 0), 0)
-    : 0;
+  const dailyPossible = day.points.possible;
   const earned = day.points.earned + asgEarned;
-  const possible = day.points.possible + asgPossible;
-  const ringValue = possible > 0 ? Math.round((earned / possible) * 1000) / 10 : day.completion;
+  const ringValue =
+    dailyPossible > 0 ? Math.round((earned / dailyPossible) * 1000) / 10 : day.completion;
 
   return (
     <div className="space-y-5 pt-2">
@@ -118,7 +116,7 @@ export function DailySheet() {
                 <span className="text-xs text-muted">اليوم: {day.streakToday}</span>
               )}
               <span className="tabular-nums text-muted" dir="ltr">
-                {earned} / {possible}
+                {earned} / {dailyPossible}
               </span>
             </div>
           </div>
@@ -191,11 +189,16 @@ export function DailySheet() {
         })
       )}
 
-      {/* المهام المستمرة — persistent, not tied to a day, so only on today. One
-          compact tappable row each (icon + title + short description + points). */}
+      {/* مهام المجموعة — sent in the community chat, not tied to a day, so only on
+          today. One compact tappable row each; points count on top of 100%. */}
       {isToday && asg.status === 'ready' && asg.assignments.length > 0 && (
         <section className="space-y-2">
-          <h2 className="px-1 text-sm font-bold text-muted">مهام مستمرة</h2>
+          <div className="px-1">
+            <h2 className="text-sm font-bold text-muted">مهام المجموعة</h2>
+            <p className="text-xs text-muted">
+              مهام مُرسَلة في المجموعة، تبقى معك من يوم لآخر حتى تُنهيها، ونقاطها إضافية فوق الـ100%.
+            </p>
+          </div>
           <ul className="space-y-2">
             {asg.assignments.map((a) => {
               const done = asg.done.has(a.id);
