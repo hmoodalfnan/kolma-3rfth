@@ -117,7 +117,7 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(200);
     expect(body.role).toBe('super_admin');
     expect(body.session.access_token).toBe('tok');
-    expect(body.redirect).toBe('/admin/global-board');
+    expect(body.redirect).toBe('/admin/daily-tasks');
     expect(rpc).toHaveBeenCalledWith('auth_reset_failures', expect.anything());
     expect(rpc).toHaveBeenCalledWith('write_audit', expect.objectContaining({ p_action: 'login' }));
   });

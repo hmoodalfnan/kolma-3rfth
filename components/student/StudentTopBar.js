@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useUnreadNotifications } from '@/lib/student/useUnreadNotifications';
 import { BrandLogo } from '@/components/ui/BrandLogo';
+import { ViewSwitch } from '@/components/admin/ViewSwitch';
 
 /**
  * A thin top row carrying the notifications bell. It lives above every student
@@ -17,7 +18,9 @@ export function StudentTopBar() {
   return (
     <div className="mx-auto flex w-full max-w-2xl items-center justify-between px-4 pt-3">
       <BrandLogo className="h-8" />
-      <Link
+      <div className="flex items-center gap-2">
+        <ViewSwitch mode="user" />
+        <Link
         href="/notifications"
         prefetch
         onClick={() => markAllSeen()}
@@ -33,7 +36,8 @@ export function StudentTopBar() {
             {count > 9 ? '9+' : count}
           </span>
         )}
-      </Link>
+        </Link>
+      </div>
     </div>
   );
 }

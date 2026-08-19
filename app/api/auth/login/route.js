@@ -117,7 +117,7 @@ async function postHandler(request) {
         session: auth.session,
         role: admin.role, // 'super_admin'
         displayName: admin.display_name,
-        redirect: '/admin/global-board',
+        redirect: '/admin/daily-tasks',
       },
       200,
     );
