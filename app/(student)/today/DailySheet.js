@@ -7,6 +7,7 @@ import { ProgressRing } from '@/components/ui/ProgressRing';
 import { SkeletonCard, SkeletonList } from '@/components/ui/Skeleton';
 import { groupBySection } from '@/lib/questions/active';
 import {
+  daysBetween,
   formatGregorianLong,
   formatHijri,
   lockReason,
@@ -43,6 +44,14 @@ function PointsChip({ points }) {
   );
 }
 
+// "متأخّر بـ N" for the group task whose day has passed unfinished.
+function lateLabel(n) {
+  if (n === 1) return 'متأخّر يوماً';
+  if (n === 2) return 'متأخّر يومين';
+  if (n <= 10) return `متأخّر ${n} أيام`;
+  return `متأخّر ${n} يوماً`;
+}
+
 function CheckCircle({ done }) {
   return (
     <span
@@ -60,8 +69,14 @@ export function DailySheet() {
   const ctx = useStudentContext();
   const [dayKey, setDayKey] = useState(() => todayInRiyadh());
 
-  const day = useDay({ studentId: ctx.student?.id, schedule: ctx.schedule, dayKey });
   const asg = useAssignments(ctx.student?.id);
+  const day = useDay({
+    studentId: ctx.student?.id,
+    schedule: ctx.schedule,
+    dayKey,
+    assignments: asg.assignments,
+    completedOn: asg.completedOn,
+  });
 
   useEffect(() => {
     if (ctx.status === 'unauthenticated') window.location.href = '/login';
@@ -77,22 +92,25 @@ export function DailySheet() {
     );
   }
 
-  const isToday = dayKey === todayInRiyadh();
+  const today = todayInRiyadh();
+  const isToday = dayKey === today;
   const sections = groupBySection(day.questions);
   const showStreak = ctx.schedule?.show_streak !== false;
 
-  // البنود اليومية round up to 100%. مهام المجموعة are a bonus counted ON TOP of
-  // that, so completing them pushes the day total above 100% (only on today,
-  // since they are not tied to a past day).
+  // مهام المجموعة are pinned to a day. البنود اليومية and that day's group tasks
+  // now share ONE ring capped at 100% — group tasks no longer overflow past it.
   const asgReady = asg.status === 'ready';
-  const includeAsg = isToday && asgReady;
-  const asgEarned = includeAsg
-    ? asg.assignments.reduce((s, a) => (asg.done.has(a.id) ? s + Number(a.points || 0) : s), 0)
-    : 0;
-  const dailyPossible = day.points.possible;
-  const earned = day.points.earned + asgEarned;
+  const dayAssignments = asgReady ? asg.assignments.filter((a) => a.task_date === dayKey) : [];
+  const groupPossible = dayAssignments.reduce((s, a) => s + Number(a.points || 0), 0);
+  const groupEarned = dayAssignments.reduce(
+    (s, a) => (asg.done.has(a.id) ? s + Number(a.points || 0) : s),
+    0,
+  );
+
+  const possible = day.points.possible + groupPossible;
+  const earned = day.points.earned + groupEarned;
   const ringValue =
-    dailyPossible > 0 ? Math.round((earned / dailyPossible) * 1000) / 10 : day.completion;
+    possible > 0 ? Math.min(100, Math.round((earned / possible) * 1000) / 10) : day.completion;
 
   return (
     <div className="space-y-5 pt-2">
@@ -116,7 +134,7 @@ export function DailySheet() {
                 <span className="text-xs text-muted">اليوم: {day.streakToday}</span>
               )}
               <span className="tabular-nums text-muted" dir="ltr">
-                {earned} / {dailyPossible}
+                {earned} / {possible}
               </span>
             </div>
           </div>
@@ -189,23 +207,27 @@ export function DailySheet() {
         })
       )}
 
-      {/* مهام المجموعة — sent in the community chat, not tied to a day, so only on
-          today. One compact tappable row each; points count on top of 100%. */}
-      {isToday && asg.status === 'ready' && asg.assignments.length > 0 && (
+      {/* مهام المجموعة for the viewed day. Each is pinned to its date; an unfinished
+          one whose day has passed shows how many days late it is, and can still be
+          done (late completions earn points but do not count toward the streak). */}
+      {dayAssignments.length > 0 && (
         <section className="space-y-2">
           <h2 className="px-1 text-sm font-bold text-muted">مهام المجموعة</h2>
           <ul className="space-y-2">
-            {asg.assignments.map((a) => {
+            {dayAssignments.map((a) => {
               const done = asg.done.has(a.id);
               const kind = KIND[a.kind] || KIND.read;
+              const lateBy = !done && a.task_date < today ? daysBetween(a.task_date, today) : 0;
+              const canToggle = dayKey <= today;
               return (
                 <li key={a.id}>
                   <button
                     type="button"
-                    onClick={() => asg.toggle(a.id)}
+                    onClick={() => canToggle && asg.toggle(a.id)}
+                    disabled={!canToggle}
                     aria-pressed={done}
-                    className={`card flex w-full items-start gap-3 p-3 text-start transition ${
-                      done ? 'bg-accent-soft' : ''
+                    className={`card flex w-full items-start gap-3 p-3 text-start transition disabled:opacity-60 ${
+                      done ? 'bg-accent-soft' : lateBy > 0 ? 'ring-1 ring-rose-300' : ''
                     }`}
                   >
                     <CheckCircle done={done} />
@@ -219,6 +241,11 @@ export function DailySheet() {
                       {a.body_text && (
                         <span className="mt-0.5 line-clamp-2 block whitespace-pre-wrap text-xs leading-relaxed text-muted">
                           {a.body_text}
+                        </span>
+                      )}
+                      {lateBy > 0 && (
+                        <span className="mt-1 inline-block rounded-full bg-danger-soft px-2 py-0.5 text-xs font-bold text-danger-ink">
+                          {lateLabel(lateBy)}
                         </span>
                       )}
                     </span>

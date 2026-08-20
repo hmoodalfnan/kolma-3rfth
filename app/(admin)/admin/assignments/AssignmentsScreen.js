@@ -13,15 +13,22 @@ import {
   updateAssignment,
   deleteAssignment,
 } from '@/lib/admin/tasks';
+import { formatGregorianLong, todayInRiyadh } from '@/lib/schedule-time/day';
 
-const EMPTY = { kind: 'read', title: '', body_text: '', points: '10' };
+const emptyForm = () => ({
+  kind: 'read',
+  title: '',
+  body_text: '',
+  points: '10',
+  task_date: todayInRiyadh(),
+});
 const KIND_LABEL = { read: '📖 قراءة', listen: '🎧 استماع' };
 
 export function AssignmentsScreen() {
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
 
@@ -39,11 +46,17 @@ export function AssignmentsScreen() {
   }, []);
 
   function openNew() {
-    setForm(EMPTY);
+    setForm(emptyForm());
     setEditing('new');
   }
   function openEdit(a) {
-    setForm({ kind: a.kind, title: a.title, body_text: a.body_text || '', points: String(a.points) });
+    setForm({
+      kind: a.kind,
+      title: a.title,
+      body_text: a.body_text || '',
+      points: String(a.points),
+      task_date: a.task_date || todayInRiyadh(),
+    });
     setEditing(a.id);
   }
 
@@ -63,6 +76,7 @@ export function AssignmentsScreen() {
           title: form.title,
           body_text: form.body_text,
           points: Number(form.points) || 0,
+          task_date: form.task_date,
         });
       }
       setEditing(null);
@@ -124,6 +138,7 @@ export function AssignmentsScreen() {
                 </span>
               </div>
               {a.body_text && <p className="line-clamp-2 text-xs text-muted">{a.body_text}</p>}
+              <p className="text-xs text-muted">📅 {formatGregorianLong(a.task_date)}</p>
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => toggleActive(a)} className="rounded-lg border border-line px-2 py-1 text-xs font-semibold">
                   {a.is_active ? 'مفعّلة' : 'معطّلة'}
@@ -165,6 +180,18 @@ export function AssignmentsScreen() {
           </Field>
           <Field label="النقاط" htmlFor="a-points">
             <NumberInput id="a-points" value={form.points} onChange={(e) => setForm({ ...form, points: e.target.value })} />
+          </Field>
+          <Field
+            label="التاريخ"
+            htmlFor="a-date"
+            hint="اليوم الذي تظهر فيه المهمة للمستخدم. الافتراضي هو اليوم."
+          >
+            <Input
+              id="a-date"
+              type="date"
+              value={form.task_date}
+              onChange={(e) => setForm({ ...form, task_date: e.target.value })}
+            />
           </Field>
           <ModalActions>
             <Button loading={saving} onClick={save}>حفظ</Button>

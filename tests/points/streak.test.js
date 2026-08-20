@@ -53,4 +53,39 @@ describe('currentStreak', () => {
       currentStreak({ questions: [...questions, fridayOnly], answersByDay, schedule, now }),
     ).toBe(3);
   });
+
+  describe('with مهام المجموعة (group tasks)', () => {
+    const answersByDay = { '2026-08-10': full, '2026-08-09': full };
+
+    it('counts the day when its group task was completed on time', () => {
+      const assignments = [{ id: 'g1', task_date: '2026-08-10' }];
+      const completedOn = { g1: '2026-08-10' };
+      expect(
+        currentStreak({ questions, answersByDay, schedule, now, assignments, completedOn }),
+      ).toBe(2);
+    });
+
+    it('breaks the streak when a due group task is still not done', () => {
+      const assignments = [{ id: 'g1', task_date: '2026-08-10' }];
+      expect(
+        currentStreak({ questions, answersByDay, schedule, now, assignments, completedOn: {} }),
+      ).toBe(0);
+    });
+
+    it('breaks the streak when the group task was completed late', () => {
+      const assignments = [{ id: 'g1', task_date: '2026-08-10' }];
+      const completedOn = { g1: '2026-08-12' };
+      expect(
+        currentStreak({ questions, answersByDay, schedule, now, assignments, completedOn }),
+      ).toBe(0);
+    });
+
+    it('accepts a Map for completedOn', () => {
+      const assignments = [{ id: 'g1', task_date: '2026-08-09' }];
+      const completedOn = new Map([['g1', '2026-08-09']]);
+      expect(
+        currentStreak({ questions, answersByDay, schedule, now, assignments, completedOn }),
+      ).toBe(2);
+    });
+  });
 });

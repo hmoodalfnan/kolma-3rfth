@@ -154,6 +154,7 @@ describe('database migrations', () => {
       '0006_drop_daily_tasks.sql',
       '0007_emoji_choices.sql',
       '0008_streak_toggle_and_leaderboard.sql',
+      '0009_group_task_dates.sql',
     ]);
   });
 
