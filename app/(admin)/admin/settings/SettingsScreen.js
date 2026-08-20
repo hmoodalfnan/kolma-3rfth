@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react';
 import { ErrorText } from '@/components/manage/Panel';
 import { Button } from '@/components/ui/Button';
-import { Field, NumberInput } from '@/components/ui/Field';
+import { Field, Input, NumberInput } from '@/components/ui/Field';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { getProgram, updateProgram } from '@/lib/admin/program';
 
 export function SettingsScreen() {
   const [program, setProgram] = useState(null);
+  const [startDate, setStartDate] = useState('');
   const [backfill, setBackfill] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -20,6 +21,7 @@ export function SettingsScreen() {
       try {
         const p = await getProgram();
         setProgram(p);
+        setStartDate(p?.start_date ?? '');
         setBackfill(String(p?.backfill_days ?? 0));
       } catch {
         setError('تعذّر تحميل الإعدادات');
@@ -52,10 +54,18 @@ export function SettingsScreen() {
       setError('أدخل عدداً بين 0 و 365');
       return;
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+      setError('اختر تاريخ بداية صحيحاً');
+      return;
+    }
+    if (program.end_date && startDate > program.end_date) {
+      setError('تاريخ البداية بعد تاريخ نهاية البرنامج');
+      return;
+    }
     setBusy(true);
     try {
-      await updateProgram(program.id, { backfill_days: n });
-      setProgram((p) => ({ ...p, backfill_days: n }));
+      await updateProgram(program.id, { backfill_days: n, start_date: startDate });
+      setProgram((p) => ({ ...p, backfill_days: n, start_date: startDate }));
       setBackfill(String(n));
       setSaved(true);
     } catch {
@@ -76,10 +86,28 @@ export function SettingsScreen() {
       ) : (
         <form onSubmit={save} className="card space-y-4 p-5">
           <Field
+            label="تاريخ بداية البرنامج"
+            htmlFor="start"
+            hint="أول يوم في البرنامج. الأيام التي قبله تكون مغلقة، وهو بداية احتساب السلسلة والأيام الظاهرة."
+          >
+            <Input
+              id="start"
+              type="date"
+              dir="ltr"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setSaved(false);
+              }}
+              max={program.end_date || undefined}
+              className="max-w-48 text-lg"
+            />
+          </Field>
+
+          <Field
             label="مهلة الرجوع للتعديل (بالأيام)"
             htmlFor="backfill"
             hint="كم يوماً يمكن للمستخدم الرجوع لتعديل بنود الأيام الماضية. 0 = اليوم فقط، 3 = اليوم والثلاثة أيام السابقة."
-            error={error}
           >
             <NumberInput
               id="backfill"
@@ -92,6 +120,8 @@ export function SettingsScreen() {
               className="max-w-32 text-lg"
             />
           </Field>
+
+          {error && <ErrorText>{error}</ErrorText>}
 
           <div className="flex items-center gap-3">
             <Button type="submit" loading={busy}>
