@@ -97,10 +97,25 @@ export function DailySheet() {
   const sections = groupBySection(day.questions);
   const showStreak = ctx.schedule?.show_streak !== false;
 
-  // مهام المجموعة are pinned to a day. البنود اليومية and that day's group tasks
-  // now share ONE ring capped at 100% — group tasks no longer overflow past it.
+  // مهام المجموعة are pinned to a day, but an unfinished one does not stay stranded
+  // on a past day nobody revisits — it FOLLOWS forward onto today (with a late
+  // badge) until it is done, while its own day still lists it if you navigate back.
+  // A task done on time is settled and does not carry. البنود اليومية and the day's
+  // group tasks share ONE ring capped at 100%.
   const asgReady = asg.status === 'ready';
-  const dayAssignments = asgReady ? asg.assignments.filter((a) => a.task_date === dayKey) : [];
+  const doneOnTime = (a) => asg.done.has(a.id) && (asg.completedOn[a.id] ?? '') <= a.task_date;
+  const dayAssignments = !asgReady
+    ? []
+    : isToday
+      ? [
+          // Overdue and not settled on time — carried onto today, oldest first.
+          ...asg.assignments
+            .filter((a) => a.task_date < today && !doneOnTime(a))
+            .sort((x, y) => (x.task_date < y.task_date ? -1 : 1)),
+          // Today's own tasks.
+          ...asg.assignments.filter((a) => a.task_date === today),
+        ]
+      : asg.assignments.filter((a) => a.task_date === dayKey);
   const groupPossible = dayAssignments.reduce((s, a) => s + Number(a.points || 0), 0);
   const groupEarned = dayAssignments.reduce(
     (s, a) => (asg.done.has(a.id) ? s + Number(a.points || 0) : s),
@@ -207,9 +222,10 @@ export function DailySheet() {
         })
       )}
 
-      {/* مهام المجموعة for the viewed day. Each is pinned to its date; an unfinished
-          one whose day has passed shows how many days late it is, and can still be
-          done (late completions earn points but do not count toward the streak). */}
+      {/* مهام المجموعة for the viewed day. An unfinished task from a past day is
+          CARRIED onto today with a "متأخّر" badge (late completions earn points but
+          do not count toward the streak). On its own day it just lists normally —
+          the late badge only shows where it has been carried to (today). */}
       {dayAssignments.length > 0 && (
         <section className="space-y-2">
           <h2 className="px-1 text-sm font-bold text-muted">مهام المجموعة</h2>
@@ -217,7 +233,8 @@ export function DailySheet() {
             {dayAssignments.map((a) => {
               const done = asg.done.has(a.id);
               const kind = KIND[a.kind] || KIND.read;
-              const lateBy = !done && a.task_date < today ? daysBetween(a.task_date, today) : 0;
+              const carried = isToday && a.task_date < today; // brought forward onto today
+              const lateBy = carried && !done ? daysBetween(a.task_date, today) : 0;
               const canToggle = dayKey <= today;
               return (
                 <li key={a.id}>
@@ -243,9 +260,18 @@ export function DailySheet() {
                           {a.body_text}
                         </span>
                       )}
-                      {lateBy > 0 && (
-                        <span className="mt-1 inline-block rounded-full bg-danger-soft px-2 py-0.5 text-xs font-bold text-danger-ink">
-                          {lateLabel(lateBy)}
+                      {(carried || lateBy > 0) && (
+                        <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                          {carried && (
+                            <span className="text-xs text-muted">
+                              📅 من {formatGregorianLong(a.task_date)}
+                            </span>
+                          )}
+                          {lateBy > 0 && (
+                            <span className="inline-block rounded-full bg-danger-soft px-2 py-0.5 text-xs font-bold text-danger-ink">
+                              {lateLabel(lateBy)}
+                            </span>
+                          )}
                         </span>
                       )}
                     </span>
