@@ -97,28 +97,42 @@ export function DailySheet() {
   const sections = groupBySection(day.questions);
   const showStreak = ctx.schedule?.show_streak !== false;
 
-  // مهام المجموعة are pinned to a day, but an unfinished one does not stay stranded
-  // on a past day nobody revisits — it FOLLOWS forward onto today (with a late
-  // badge) until it is done, while its own day still lists it if you navigate back.
-  // A task done on time is settled and does not carry. البنود اليومية and the day's
-  // group tasks share ONE ring capped at 100%.
+  // مهام المجموعة are pinned to a day. An unfinished one does not stay stranded on a
+  // past day nobody revisits — it FOLLOWS forward onto today (with a late badge)
+  // until it is done. But the MOMENT it is done it settles onto the day it was
+  // completed and stops following forward: a task done on the 20th shows on the 20th
+  // and is gone from the 21st. Each day therefore shows the task's TRUE status on
+  // that day — done only if it was completed that very day, otherwise undone — so a
+  // task dated the 19th but done on the 20th reads as "missed" on the 19th and "done"
+  // on the 20th, an honest record of when it actually happened. البنود اليومية and the
+  // day's group tasks share ONE ring capped at 100%.
   const asgReady = asg.status === 'ready';
-  const doneOnTime = (a) => asg.done.has(a.id) && (asg.completedOn[a.id] ?? '') <= a.task_date;
+  const doneOn = (a) => asg.completedOn[a.id] === dayKey; // done on the day being viewed
   const dayAssignments = !asgReady
     ? []
     : isToday
       ? [
-          // Overdue and not settled on time — carried onto today, oldest first.
+          // From past days: still undone (carried, late) OR completed today (kept
+          // here as done). Oldest first. A task done on an earlier day is neither —
+          // it settled on that day and no longer appears today.
           ...asg.assignments
-            .filter((a) => a.task_date < today && !doneOnTime(a))
+            .filter(
+              (a) =>
+                a.task_date < today &&
+                (!asg.done.has(a.id) || asg.completedOn[a.id] === today),
+            )
             .sort((x, y) => (x.task_date < y.task_date ? -1 : 1)),
           // Today's own tasks.
           ...asg.assignments.filter((a) => a.task_date === today),
         ]
-      : asg.assignments.filter((a) => a.task_date === dayKey);
+      : // A past/other day lists the tasks dated to it (showing their real status
+        // that day) plus any task actually completed on it.
+        asg.assignments.filter(
+          (a) => a.task_date === dayKey || asg.completedOn[a.id] === dayKey,
+        );
   const groupPossible = dayAssignments.reduce((s, a) => s + Number(a.points || 0), 0);
   const groupEarned = dayAssignments.reduce(
-    (s, a) => (asg.done.has(a.id) ? s + Number(a.points || 0) : s),
+    (s, a) => (doneOn(a) ? s + Number(a.points || 0) : s),
     0,
   );
 
@@ -234,11 +248,11 @@ export function DailySheet() {
           <h2 className="px-1 text-sm font-bold text-muted">مهام المجموعة</h2>
           <ul className="space-y-2">
             {dayAssignments.map((a) => {
-              const done = asg.done.has(a.id);
+              const done = doneOn(a); // done on the day being viewed, not ever
               const kind = KIND[a.kind] || KIND.read;
-              const carried = isToday && a.task_date < today; // brought forward onto today
-              const lateBy = carried && !done ? daysBetween(a.task_date, today) : 0;
-              const canToggle = dayKey <= today;
+              const carried = a.task_date < dayKey; // originated on an earlier day
+              const lateBy = carried && !done ? daysBetween(a.task_date, dayKey) : 0;
+              const canToggle = isToday; // completion happens now; past days are read-only
               return (
                 <li key={a.id}>
                   <button
