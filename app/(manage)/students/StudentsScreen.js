@@ -17,19 +17,35 @@ import {
   deleteStudent,
 } from '@/lib/manage/api';
 import { fetchStudentTotals } from '@/lib/boards/queries';
+import { useCachedResource } from '@/lib/manage/cache';
 import { getBrowserClient } from '@/lib/supabase/browser';
 import { ImportWizard } from './ImportWizard';
 import { TempPinSheet } from './TempPinSheet';
 import { StudentBreakdown } from '@/components/boards/StudentBreakdown';
 import { useTransientError } from '@/lib/ui/useTransientError';
 
+// A frozen, stable reference for "no rows yet", so memoized selectors that
+// depend on these lists are not invalidated by a fresh [] on every render.
+const EMPTY = Object.freeze([]);
+
 export function StudentsScreen() {
   const { current } = useSchedule();
   const toast = useToast();
 
-  const [students, setStudents] = useState(null);
-  const [groups, setGroups] = useState([]);
-  const [totals, setTotals] = useState([]);
+  const cacheKey = current ? `students:${current.id}` : null;
+  const fetchAll = useCallback(async () => {
+    const [s, g, t] = await Promise.all([
+      listStudents(current.id),
+      listGroups(current.id),
+      fetchStudentTotals(getBrowserClient(), { scheduleId: current.id }).catch(() => []),
+    ]);
+    return { students: s, groups: g, totals: t };
+  }, [current]);
+  const { data, error: loadError, setData, reload } = useCachedResource(cacheKey, fetchAll);
+  const students = data ? data.students : null;
+  // Stable empty fallbacks so downstream useMemo deps do not change every render.
+  const groups = data?.groups ?? EMPTY;
+  const totals = data?.totals ?? EMPTY;
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState('all');
   const [mode, setMode] = useState(null);
@@ -42,28 +58,6 @@ export function StudentsScreen() {
   // A dialog covers the banner behind it, so failures raised while one is open
   // are reported inside it instead.
   const [dialogError, setDialogError] = useTransientError();
-
-  const load = useCallback(async () => {
-    if (!current) return;
-    setStudents(null);
-    try {
-      const [s, g, t] = await Promise.all([
-        listStudents(current.id),
-        listGroups(current.id),
-        fetchStudentTotals(getBrowserClient(), { scheduleId: current.id }).catch(() => []),
-      ]);
-      setStudents(s);
-      setGroups(g);
-      setTotals(t);
-    } catch (err) {
-      setError(err.message);
-      setStudents([]);
-    }
-  }, [current]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const totalFor = useMemo(() => {
     const map = new Map(totals.map((t) => [t.student_id, t]));
@@ -87,7 +81,10 @@ export function StudentsScreen() {
   // Shared by the card and table layouts below so the two never drift apart.
   // Each writes optimistically and rolls back the single field it touched.
   const patchRow = (id, patch) =>
-    setStudents((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setData((d) => ({
+      ...d,
+      students: d.students.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+    }));
 
   async function setGroup(student, groupId) {
     const before = student.group_id;
@@ -115,7 +112,7 @@ export function StudentsScreen() {
     try {
       const res = await resetStudentPin(student.id);
       setPinSheet([{ id: student.id, full_name: res.full_name, tempPin: res.tempPin }]);
-      await load();
+      await reload();
     } catch (err) {
       setError(err.message);
     }
@@ -137,7 +134,7 @@ export function StudentsScreen() {
   async function removeStudent(student) {
     try {
       await deleteStudent(student.id);
-      setStudents((rows) => rows.filter((r) => r.id !== student.id));
+      setData((d) => ({ ...d, students: d.students.filter((r) => r.id !== student.id) }));
       setRemoving(null);
       if (viewing?.id === student.id) setViewing(null);
       toast.push('تم حذف الطالب', 'success');
@@ -148,7 +145,7 @@ export function StudentsScreen() {
 
   return (
     <div className="space-y-4">
-      <ErrorText>{error}</ErrorText>
+      <ErrorText>{error || loadError}</ErrorText>
 
       {pinSheet.length > 0 && (
         <TempPinSheet
@@ -184,7 +181,7 @@ export function StudentsScreen() {
               const result = await createStudents({ scheduleId: current.id, ...payload });
               setPinSheet(result.created);
               setMode(null);
-              await load();
+              await reload();
               toast.push('تمت إضافة الطالب', 'success');
             } catch (err) {
               setError(err.message);
@@ -209,7 +206,7 @@ export function StudentsScreen() {
                 // Phones are never sent to the server, so they are merged in
                 // here purely to build the WhatsApp links.
                 setPinPhones((prev) => ({ ...prev, ...(phones ?? {}) }));
-                await load();
+                await reload();
                 return result;
               }}
             />
@@ -240,7 +237,7 @@ export function StudentsScreen() {
           </Select>
         </div>
 
-        {students === null ? (
+        {students === null && !loadError ? (
           <div className="mt-3">
             <SkeletonList rows={10} />
           </div>

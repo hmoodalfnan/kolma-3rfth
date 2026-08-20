@@ -11,6 +11,7 @@ import { useSchedule } from '@/lib/manage/useSchedule';
 import { fetchStudentTotals, fetchGroupTotals, fetchQuestionLeaders, rankRows } from '@/lib/boards/queries';
 import { buildGroupRows, UNGROUPED } from '@/lib/boards/group-metrics';
 import { listQuestions } from '@/lib/manage/api';
+import { useCachedResource } from '@/lib/manage/cache';
 import { useTransientError } from '@/lib/ui/useTransientError';
 
 const TABS = [
@@ -18,6 +19,10 @@ const TABS = [
   { id: 'groups', label: 'المجموعات' },
   { id: 'questions', label: 'حسب البند' },
 ];
+
+// Stable "no rows yet" reference, so memoized selectors are not invalidated by
+// a fresh [] on every render.
+const EMPTY = Object.freeze([]);
 
 export function BoardsScreen() {
   const { current } = useSchedule();
@@ -54,25 +59,20 @@ export function BoardsScreen() {
 }
 
 function OverallBoard({ schedule, onError }) {
-  const [rows, setRows] = useState(null);
+  const fetchRows = useCallback(
+    async () => rankRows(await fetchStudentTotals(getBrowserClient(), { scheduleId: schedule.id })),
+    [schedule.id],
+  );
+  const { data: rows, error: loadError } = useCachedResource(
+    `board-overall:${schedule.id}`,
+    fetchRows,
+  );
   const [open, setOpen] = useState(null);
   const blur = schedule.blur_leaderboard_names;
 
   useEffect(() => {
-    let alive = true;
-    setRows(null);
-    fetchStudentTotals(getBrowserClient(), { scheduleId: schedule.id })
-      .then((data) => alive && setRows(rankRows(data)))
-      .catch((err) => {
-        if (alive) {
-          onError(err.message);
-          setRows([]);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, [schedule.id, onError]);
+    if (loadError) onError(loadError);
+  }, [loadError, onError]);
 
   const openRow = (row) => (
     <button
@@ -143,35 +143,24 @@ function OverallBoard({ schedule, onError }) {
 }
 
 function GroupsBoard({ schedule, onError }) {
-  const [rows, setRows] = useState(null);
-  const [students, setStudents] = useState([]);
+  const fetchData = useCallback(async () => {
+    const [g, s] = await Promise.all([
+      fetchGroupTotals(getBrowserClient(), { scheduleId: schedule.id }),
+      fetchStudentTotals(getBrowserClient(), { scheduleId: schedule.id }),
+    ]);
+    return { rows: rankRows(g), students: s };
+  }, [schedule.id]);
+  const { data, error: loadError } = useCachedResource(`board-groups:${schedule.id}`, fetchData);
+  const rows = data?.rows ?? null;
+  const students = data?.students ?? EMPTY;
   const [open, setOpen] = useState(null);
   const [detail, setDetail] = useState(null);
   const [metric, setMetric] = useState('avg_points'); // fair default
   const blur = schedule.blur_leaderboard_names;
 
   useEffect(() => {
-    let alive = true;
-    setRows(null);
-    Promise.all([
-      fetchGroupTotals(getBrowserClient(), { scheduleId: schedule.id }),
-      fetchStudentTotals(getBrowserClient(), { scheduleId: schedule.id }),
-    ])
-      .then(([g, s]) => {
-        if (!alive) return;
-        setRows(rankRows(g));
-        setStudents(s);
-      })
-      .catch((err) => {
-        if (alive) {
-          onError(err.message);
-          setRows([]);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, [schedule.id, onError]);
+    if (loadError) onError(loadError);
+  }, [loadError, onError]);
 
   // Students with no group are invisible to v_group_totals, which groups by
   // group_id — so a whole bucket of people simply did not appear anywhere on

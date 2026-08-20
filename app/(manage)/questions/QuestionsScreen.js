@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast';
 import { Panel, EmptyState, ErrorText } from '@/components/manage/Panel';
 import { QuestionEditor } from '@/components/questions/editors/QuestionEditor';
 import { useSchedule } from '@/lib/manage/useSchedule';
+import { useCachedResource } from '@/lib/manage/cache';
 import {
   listQuestions,
   createQuestion,
@@ -28,27 +29,19 @@ export function QuestionsScreen() {
   const { current } = useSchedule();
   const toast = useToast();
 
-  const [questions, setQuestions] = useState(null);
+  const cacheKey = current ? `questions:${current.id}` : null;
+  const fetchQuestions = useCallback(() => listQuestions(current.id), [current]);
+  const {
+    data: questions,
+    error: loadError,
+    setData: setQuestions,
+    reload: load,
+  } = useCachedResource(cacheKey, fetchQuestions);
   const [editing, setEditing] = useState(null);
   const [removing, setRemoving] = useState(null);
   const [showLibrary, setShowLibrary] = useState(false);
   const [error, setError] = useTransientError();
   const [dialogError, setDialogError] = useTransientError();
-
-  const load = useCallback(async () => {
-    if (!current) return;
-    setQuestions(null);
-    try {
-      setQuestions(await listQuestions(current.id));
-    } catch (err) {
-      setError(err.message);
-      setQuestions([]);
-    }
-  }, [current]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   if (!current) return <EmptyState>اختر رحلة أولاً.</EmptyState>;
 
@@ -101,7 +94,7 @@ export function QuestionsScreen() {
 
   return (
     <div className="space-y-4">
-      <ErrorText>{error}</ErrorText>
+      <ErrorText>{error || loadError}</ErrorText>
 
       <Panel
         title={`بنود الرحلة — ${current.name}`}
@@ -188,7 +181,7 @@ export function QuestionsScreen() {
           onDelete={() => destroy(removing)}
         />
 
-        {questions === null ? (
+        {questions === null && !loadError ? (
           <SkeletonList rows={8} />
         ) : questions.length === 0 ? (
           <EmptyState>لا توجد بنود — أضف بنداً أو انسخ من المكتبة.</EmptyState>

@@ -22,11 +22,16 @@ import {
   grantPoints,
   undoGrant,
 } from '@/lib/manage/api';
+import { useCachedResource } from '@/lib/manage/cache';
 import { addDays, formatDayArabic, todayInRiyadh } from '@/lib/schedule-time/day';
 import { useTransientError } from '@/lib/ui/useTransientError';
 
 // Symmetric, so a deduction is the same gesture as an award.
 const QUICK = [1, 3, 5, -1, -3, -5];
+
+// Stable "no rows yet" reference so memoized selectors are not invalidated by a
+// fresh [] on every render.
+const EMPTY = Object.freeze([]);
 
 /**
  * Which day the points are about.
@@ -89,39 +94,33 @@ export function GradingScreen() {
   const { current } = useSchedule();
   const toast = useToast();
 
-  const [criteria, setCriteria] = useState(null);
-  const [groups, setGroups] = useState([]);
-  const [students, setStudents] = useState([]);
-  const [grants, setGrants] = useState([]);
+  const cacheKey = current ? `grading:${current.id}` : null;
+  const fetchAll = useCallback(async () => {
+    const [c, g, s, h] = await Promise.all([
+      listCriteria(current.id),
+      listGroups(current.id),
+      listStudents(current.id),
+      listGrants(current.id),
+    ]);
+    return { criteria: c, groups: g, students: s.filter((x) => x.is_active), grants: h };
+  }, [current]);
+  const { data, error: loadError, setData, reload: load } = useCachedResource(cacheKey, fetchAll);
+  const criteria = data?.criteria ?? null;
+  const groups = data?.groups ?? EMPTY;
+  const students = data?.students ?? EMPTY;
+  const grants = data?.grants ?? EMPTY;
+
   const [undoing, setUndoing] = useState(null);
   const [error, setError] = useTransientError();
 
-  const load = useCallback(async () => {
-    if (!current) return;
-    setCriteria(null);
-    try {
-      const [c, g, s, h] = await Promise.all([
-        listCriteria(current.id),
-        listGroups(current.id),
-        listStudents(current.id),
-        listGrants(current.id),
-      ]);
-      setCriteria(c);
-      setGroups(g);
-      setStudents(s.filter((x) => x.is_active));
-      setGrants(h);
-    } catch (err) {
-      setError(err.message);
-      setCriteria([]);
-    }
-  }, [current]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
   if (!current) return <EmptyState>اختر رحلة أولاً.</EmptyState>;
-  if (criteria === null) return <SkeletonList rows={8} className="h-20" />;
+  if (criteria === null) {
+    return loadError ? (
+      <ErrorText>{loadError}</ErrorText>
+    ) : (
+      <SkeletonList rows={8} className="h-20" />
+    );
+  }
 
   const submit = async (payload, roster = []) => {
     try {
@@ -142,7 +141,7 @@ export function GradingScreen() {
 
   return (
     <div className="space-y-4">
-      <ErrorText>{error}</ErrorText>
+      <ErrorText>{error || loadError}</ErrorText>
 
       <CriteriaPanel scheduleId={current.id} criteria={criteria} onChanged={load} />
 
@@ -216,7 +215,7 @@ export function GradingScreen() {
         onCancel={() => setUndoing(null)}
         onConfirm={async () => {
           const id = undoing.id;
-          setGrants((rows) => rows.filter((r) => r.id !== id));
+          setData((d) => ({ ...d, grants: d.grants.filter((r) => r.id !== id) }));
           setUndoing(null);
           try {
             await undoGrant(id);

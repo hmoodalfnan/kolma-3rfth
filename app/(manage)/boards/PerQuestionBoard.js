@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal, ModalActions } from '@/components/ui/Modal';
 import { Panel, EmptyState } from '@/components/manage/Panel';
@@ -8,7 +8,10 @@ import { BoardTable, RankBadge, StudentName } from '@/components/boards/BoardTab
 import { getBrowserClient } from '@/lib/supabase/browser';
 import { fetchStudentTotals, fetchQuestionLeaders, rankRows } from '@/lib/boards/queries';
 import { listQuestions } from '@/lib/manage/api';
+import { useCachedResource } from '@/lib/manage/cache';
 import { groupBySection } from '@/lib/questions/active';
+
+const EMPTY = Object.freeze([]);
 
 /**
  * Leaders across any set of بنود.
@@ -22,44 +25,47 @@ import { groupBySection } from '@/lib/questions/active';
  * per بند either way.
  */
 export function PerQuestionBoard({ schedule, onError }) {
-  const [questions, setQuestions] = useState(null);
+  const fetchMeta = useCallback(async () => {
+    const [q, s] = await Promise.all([
+      listQuestions(schedule.id),
+      fetchStudentTotals(getBrowserClient(), { scheduleId: schedule.id }),
+    ]);
+    return { questions: q, students: s };
+  }, [schedule.id]);
+  const { data: meta, error: metaError } = useCachedResource(
+    `board-perq-meta:${schedule.id}`,
+    fetchMeta,
+  );
+  const questions = meta?.questions ?? null;
+  const students = meta?.students ?? EMPTY;
+
+  const fetchLeaders = useCallback(
+    () => fetchQuestionLeaders(getBrowserClient(), { scheduleId: schedule.id, limit: 5000 }),
+    [schedule.id],
+  );
+  const { data: rows, error: rowsError } = useCachedResource(
+    `board-perq-rows:${schedule.id}`,
+    fetchLeaders,
+  );
+
   const [selected, setSelected] = useState(() => new Set());
-  const [rows, setRows] = useState(null);
-  const [students, setStudents] = useState([]);
   const [picking, setPicking] = useState(false);
   const blur = schedule.blur_leaderboard_names;
 
   useEffect(() => {
-    let alive = true;
-    Promise.all([
-      listQuestions(schedule.id),
-      fetchStudentTotals(getBrowserClient(), { scheduleId: schedule.id }),
-    ])
-      .then(([q, s]) => {
-        if (!alive) return;
-        setQuestions(q);
-        setStudents(s);
-        if (q[0]) setSelected(new Set([q[0].id]));
-      })
-      .catch((err) => alive && onError(err.message));
-    return () => {
-      alive = false;
-    };
-  }, [schedule.id, onError]);
+    const err = metaError || rowsError;
+    if (err) onError(err);
+  }, [metaError, rowsError, onError]);
 
-  const load = useCallback(async () => {
-    setRows(null);
-    try {
-      setRows(await fetchQuestionLeaders(getBrowserClient(), { scheduleId: schedule.id, limit: 5000 }));
-    } catch (err) {
-      onError(err.message);
-      setRows([]);
-    }
-  }, [schedule.id, onError]);
-
+  // Pre-select the first بند once the list first arrives, without clobbering a
+  // choice the user has since made.
+  const initialized = useRef(false);
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!initialized.current && questions && questions[0]) {
+      initialized.current = true;
+      setSelected(new Set([questions[0].id]));
+    }
+  }, [questions]);
 
   const nameOf = useMemo(() => {
     const map = new Map(students.map((s) => [s.student_id, s]));
