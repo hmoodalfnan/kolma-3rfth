@@ -26,7 +26,7 @@ export function DateStrip({ schedule, selected, onSelect, completionFor }) {
         onClick={() => onSelect(addDays(selected, -1))}
         className="size-10 shrink-0 rounded-lg border border-line text-brand"
       >
-        ›
+        ‹
       </button>
 
       <div className="flex flex-1 gap-1.5 overflow-x-auto pb-1">
@@ -67,7 +67,7 @@ export function DateStrip({ schedule, selected, onSelect, completionFor }) {
         onClick={() => onSelect(addDays(selected, 1))}
         className="size-10 shrink-0 rounded-lg border border-line text-brand"
       >
-        ‹
+        ›
       </button>
     </div>
   );
