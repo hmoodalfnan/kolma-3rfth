@@ -252,12 +252,15 @@ export function DailySheet() {
               const kind = KIND[a.kind] || KIND.read;
               const carried = a.task_date < dayKey; // originated on an earlier day
               const lateBy = carried && !done ? daysBetween(a.task_date, dayKey) : 0;
-              const canToggle = isToday; // completion happens now; past days are read-only
+              // Editable on any day still open for editing — today, and past days
+              // within مهلة الرجوع للتعديل — using the same gate as البنود. Ticking a
+              // past day settles the task on that day.
+              const canToggle = day.editable;
               return (
                 <li key={a.id}>
                   <button
                     type="button"
-                    onClick={() => canToggle && asg.toggle(a.id)}
+                    onClick={() => canToggle && asg.toggle(a.id, dayKey)}
                     disabled={!canToggle}
                     aria-pressed={done}
                     className={`card flex w-full items-start gap-3 p-3 text-start transition disabled:opacity-60 ${
