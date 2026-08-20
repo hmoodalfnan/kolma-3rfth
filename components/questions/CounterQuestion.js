@@ -2,8 +2,12 @@
 
 export function CounterQuestion({ question, value, onChange, disabled }) {
   const max = question.config?.max ?? 1;
+  const target = question.config?.target ?? max;
   const unit = question.config?.unit_label ?? '';
   const current = typeof value === 'number' ? value : 0;
+  // Percent of the target (the question's 100%); passing it is bonus above 100%.
+  const pct = target > 0 ? Math.round((current / target) * 100) : 0;
+  const overTarget = current > target;
 
   const step = (delta) => {
     if (disabled) return;
@@ -40,7 +44,25 @@ export function CounterQuestion({ question, value, onChange, disabled }) {
           +
         </button>
       </div>
-      <p className="mt-2 text-center text-xs text-muted">الحد الأقصى {max}</p>
+      <div className="mt-2 flex items-center justify-center gap-2 text-xs">
+        <span className="text-muted">
+          الهدف {target}
+          {target !== max && <span className="text-muted"> · الأقصى {max}</span>}
+        </span>
+        {current > 0 && (
+          <span
+            className={`rounded-full px-2 py-0.5 font-bold ${
+              overTarget
+                ? 'bg-gold-100 text-gold-700'
+                : pct >= 100
+                  ? 'bg-accent-soft text-accent'
+                  : 'bg-chip text-chip-ink'
+            }`}
+          >
+            {pct}%{overTarget && ' 🎉'}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

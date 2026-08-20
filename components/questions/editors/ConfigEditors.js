@@ -141,22 +141,40 @@ export function ChoiceConfig({ config, onChange }) {
 
 export function CounterConfig({ config, onChange }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      <Field label="النقاط لكل وحدة" htmlFor="ppu">
-        <NumberInput
-          id="ppu"
-          value={config.points_per_unit ?? 1}
-          onChange={(e) => onChange({ ...config, points_per_unit: Number(e.target.value) })}
-        />
-      </Field>
-      <Field label="الحد الأقصى" htmlFor="cmax">
-        <NumberInput
-          id="cmax"
-          decimal={false}
-          value={config.max ?? 1}
-          onChange={(e) => onChange({ ...config, max: Number(e.target.value) })}
-        />
-      </Field>
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="النقاط لكل وحدة" htmlFor="ppu">
+          <NumberInput
+            id="ppu"
+            value={config.points_per_unit ?? 1}
+            onChange={(e) => onChange({ ...config, points_per_unit: Number(e.target.value) })}
+          />
+        </Field>
+        <Field
+          label="الهدف (نقاط كاملة)"
+          htmlFor="ctarget"
+          hint="العدد الذي يمنح 100% لهذا البند. الافتراضي = الحد الأقصى."
+        >
+          <NumberInput
+            id="ctarget"
+            decimal={false}
+            value={config.target ?? config.max ?? 1}
+            onChange={(e) => onChange({ ...config, target: Number(e.target.value) })}
+          />
+        </Field>
+        <Field
+          label="الحد الأقصى"
+          htmlFor="cmax"
+          hint="أعلى رقم يمكن بلوغه — ما بعد الهدف نقاط إضافية فوق 100%."
+        >
+          <NumberInput
+            id="cmax"
+            decimal={false}
+            value={config.max ?? 1}
+            onChange={(e) => onChange({ ...config, max: Number(e.target.value) })}
+          />
+        </Field>
+      </div>
       <Field label="اسم الوحدة" htmlFor="cunit" hint="مثل: صفحة">
         <Input
           id="cunit"

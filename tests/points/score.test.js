@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scoreAnswer, maxPoints, completionPct } from '@/lib/points/score';
+import { scoreAnswer, maxPoints, completionPct, dayPoints } from '@/lib/points/score';
 
 const boolQ = { id: 'q1', type: 'bool', config: {}, points: 5 };
 const prayerQ = {
@@ -129,5 +129,36 @@ describe('completionPct', () => {
 
   it('returns zero for an empty question list rather than dividing by zero', () => {
     expect(completionPct([], {})).toBe(0);
+  });
+});
+
+describe('counter target (100% threshold with bonus above)', () => {
+  // 1 point/unit, target 10 = 100%, but the counter is open up to 1000.
+  const targetQ = {
+    id: 'qc',
+    type: 'counter',
+    config: { points_per_unit: 1, target: 10, max: 1000 },
+    points: 0,
+  };
+
+  it('sets 100% points at the target, not the max', () => {
+    expect(maxPoints(targetQ)).toBe(10);
+  });
+
+  it('keeps scoring past the target as bonus, up to the max', () => {
+    expect(scoreAnswer(targetQ, 10)).toBe(10); // exactly 100%
+    expect(scoreAnswer(targetQ, 1000)).toBe(1000); // 10000% worth of points
+    expect(scoreAnswer(targetQ, 5000)).toBe(1000); // clamped to max
+  });
+
+  it('caps a question at its own 100% in completion, so bonus cannot mask others', () => {
+    expect(completionPct([targetQ], { qc: 1000 })).toBe(100);
+    // bool unfinished (0/5) + counter way over target (capped at 10/10) → 10/15.
+    expect(completionPct([boolQ, targetQ], { q1: false, qc: 1000 })).toBe(66.7);
+  });
+
+  it('dayPoints reports raw earned (bonus) and capped earned (for the ring)', () => {
+    const dp = dayPoints([boolQ, targetQ], { q1: false, qc: 1000 });
+    expect(dp).toEqual({ earned: 1000, cappedEarned: 10, possible: 15 });
   });
 });

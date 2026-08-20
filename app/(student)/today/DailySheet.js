@@ -123,9 +123,12 @@ export function DailySheet() {
   );
 
   const possible = day.points.possible + groupPossible;
-  const earned = day.points.earned + groupEarned;
+  const earned = day.points.earned + groupEarned; // raw tally (counter bonus shows here)
+  // The ring caps each question at its own 100%, so an over-target counter fills
+  // its own share but never masks other unfinished بنود — and stays ≤ 100%.
+  const cappedEarned = day.points.cappedEarned + groupEarned;
   const ringValue =
-    possible > 0 ? Math.min(100, Math.round((earned / possible) * 1000) / 10) : day.completion;
+    possible > 0 ? Math.min(100, Math.round((cappedEarned / possible) * 1000) / 10) : day.completion;
 
   return (
     <div className="space-y-5 pt-2">

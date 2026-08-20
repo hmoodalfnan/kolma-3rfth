@@ -155,6 +155,7 @@ describe('database migrations', () => {
       '0007_emoji_choices.sql',
       '0008_streak_toggle_and_leaderboard.sql',
       '0009_group_task_dates.sql',
+      '0010_counter_target.sql',
     ]);
   });
 
